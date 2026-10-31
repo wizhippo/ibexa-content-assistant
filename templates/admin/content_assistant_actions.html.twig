@@ -1,0 +1,38 @@
+{% extends '@ibexadesign/ui/layout.html.twig' %}
+{% block title %}AI actions{% endblock %}
+{% block content %}
+<div class="container-fluid p-4">
+    <h1>AI actions</h1>
+    <p>Configure reusable actions for RichText, Text block and Text line fields. The service uses Symfony AI and the configured content assistant model.</p>
+    {% for message in app.flashes('success') %}<p role="status" class="alert alert-success">{{ message }}</p>{% endfor %}
+    {% if error %}<p role="alert" class="alert alert-danger">{{ error }}</p>{% endif %}
+    <form method="get" class="d-flex gap-2 mb-3">
+        <input class="form-control" name="q" value="{{ q }}" placeholder="Search actions" aria-label="Search actions">
+        <select class="form-select" name="type" aria-label="Action type"><option value="">All types</option>{% for id, label in types %}<option value="{{ id }}" {{ type == id ? 'selected' }}>{{ label }}</option>{% endfor %}</select>
+        <select class="form-select" name="status" aria-label="Action status"><option value="">All statuses</option><option value="enabled" {{ status == 'enabled' ? 'selected' }}>Enabled</option><option value="disabled" {{ status == 'disabled' ? 'selected' }}>Disabled</option></select>
+        <button class="btn btn-secondary">Filter</button>
+    </form>
+    <table class="table"><thead><tr><th>Name / identifier</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+    {% for id, action in actions %}
+        <tr><td>{{ action.name }}<br><small>{{ id }}</small></td><td>{{ types[action.type] }}</td><td>{{ action.enabled ? 'Enabled' : 'Disabled' }}</td><td>
+            <a class="btn btn-secondary" href="{{ path('wizhippo_ibexa_content_assistant_actions', {edit: id}) }}">Edit</a>
+            <form method="post" class="d-inline">
+                <input type="hidden" name="_token" value="{{ csrf_token('wizhippo_ibexa_content_assistant_actions') }}"><input type="hidden" name="revision" value="{{ revision }}">
+                <input type="hidden" name="identifier" value="{{ id }}"><button class="btn btn-secondary" name="operation" value="delete">Delete</button>
+            </form>
+        </td></tr>
+    {% else %}<tr><td colspan="4">No matching actions.</td></tr>{% endfor %}
+    </tbody></table>
+    <h2>{{ editing ? 'Edit action' : 'Create action' }}</h2>
+    <form method="post">
+        <input type="hidden" name="_token" value="{{ csrf_token('wizhippo_ibexa_content_assistant_actions') }}"><input type="hidden" name="revision" value="{{ revision }}">
+        <label class="d-block mb-2">Identifier<input class="form-control" name="identifier" value="{{ identifier }}" pattern="[a-z][a-z0-9_]{0,63}" maxlength="64" required {{ editing ? 'readonly' }}></label>
+        <label class="d-block mb-2">Name<input class="form-control" name="name" value="{{ configuration.name }}" maxlength="100" required></label>
+        <label class="d-block mb-2">Action type<select class="form-select" name="type">{% for id, label in types %}<option value="{{ id }}" {{ configuration.type == id ? 'selected' }}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="d-block mb-2">Instructions<textarea class="form-control" rows="4" name="prompt" maxlength="2000" required>{{ configuration.prompt }}</textarea></label>
+        <label class="d-block mb-2"><input type="checkbox" name="enabled" value="1" {{ configuration.enabled ? 'checked' }}> Enabled</label>
+        <button class="btn btn-primary" name="operation" value="{{ editing ? 'update' : 'create' }}">Save action</button>
+        {% if editing %}<a class="btn btn-secondary" href="{{ path('wizhippo_ibexa_content_assistant_actions') }}">Cancel</a>{% endif %}
+    </form>
+</div>
+{% endblock %}

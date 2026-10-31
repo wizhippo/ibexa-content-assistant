@@ -1,0 +1,13 @@
+framework:
+    http_client:
+        scoped_clients:
+            wizhippo_ibexa_content_assistant.http_client:
+                base_uri: '%env(OPENAI_BASE_URL)%'
+                timeout: 30
+                max_duration: 60
+    rate_limiter:
+        wizhippo_ibexa_content_assistant:
+            policy: fixed_window
+            limit: 10
+            interval: '1 minute'
+

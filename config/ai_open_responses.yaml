@@ -1,0 +1,9 @@
+ai:
+    platform:
+        openresponses:
+            wizhippo_ibexa_content_assistant:
+                base_url: '%env(OPENAI_BASE_URL)%'
+                responses_path: '/responses'
+                api_key: '%env(OPENAI_API_KEY)%'
+                http_client: 'wizhippo_ibexa_content_assistant.http_client'
+                model_catalog: 'wizhippo_ibexa_content_assistant.model_catalog'

@@ -1,0 +1,5 @@
+{
+  "name": "ibexa-content-assistant",
+  "private": true,
+  "scripts": { "test": "node tests/JavaScript/content-assistant.test.cjs" }
+}

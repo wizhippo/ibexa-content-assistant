@@ -1,0 +1,16 @@
+// Keep the field label first, with a compact action alongside it.
+.wizhippo-ibexa-content-assistant-field-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+
+  .ibexa-field-edit__label {
+    margin-bottom: 0;
+  }
+
+  .ibexa-btn {
+    flex-shrink: 0;
+  }
+}

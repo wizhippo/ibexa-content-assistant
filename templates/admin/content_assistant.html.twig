@@ -1,0 +1,54 @@
+<dialog class="p-3" style="width:min(1100px,95vw);max-height:90vh;overflow:auto;border:1px solid #ccc;border-radius:8px" aria-label="AI actions" data-content-assistant
+         data-endpoint="{{ path('wizhippo_ibexa_content_assistant_suggest') }}"
+         data-csrf="{{ csrf_token('wizhippo_ibexa_content_assistant') }}"
+         data-content-id="{{ content.id }}"
+         data-version-no="{{ content.versionInfo.versionNo }}"
+         data-language="{{ language.languageCode }}">
+    <div class="d-flex justify-content-between"><h2>AI actions</h2><button type="button" class="btn btn-secondary" data-assistant-close>Close</button></div>
+    <p class="mt-2">Review suggestions before applying them. Only the selected source and your instructions are sent to the AI provider.</p>
+    <label class="d-block">Field
+        <select class="form-select" data-assistant-field>
+            {% for identifier, label in assistant_fields %}
+                <option value="{{ identifier }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="d-block mt-2">Action
+        <select class="form-select" data-assistant-operation>
+            {% for identifier, action in assistant_actions %}
+                <option value="{{ identifier }}" data-type="{{ action.type }}" {{ identifier == 'rewrite' ? 'selected' }}>{{ action.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="d-block mt-2">Use content from
+        <select class="form-select" data-assistant-scope>
+            <option value="field">Entire selected field</option>
+            <option value="selection">Selected content in the RichText editor</option>
+        </select>
+    </label>
+    <p class="mt-2">Writing adds new content. Rewriting can improve headings, lists, and tables using the formats supported by this editor. Existing embeds and custom content are retained. Review the formatted preview before applying.</p>
+    <label class="d-block mt-2">Instructions
+        <textarea class="form-control" rows="3" maxlength="2000" data-assistant-instructions></textarea>
+    </label>
+    <button type="button" class="btn btn-secondary mt-2" data-assistant-generate disabled>Generate suggestion</button>
+    <p class="mt-2" role="status" aria-live="polite" data-assistant-status>Loading assistant…</p>
+    <div data-assistant-preview hidden>
+        <div data-assistant-plain>
+        <label class="d-block">Source sent to the assistant
+            <textarea class="form-control" rows="3" readonly data-assistant-source></textarea>
+        </label>
+        <label class="d-block mt-2">Suggested text
+            <textarea class="form-control" rows="6" readonly data-assistant-result></textarea>
+        </label>
+        </div>
+        <div data-assistant-rich hidden>
+            <h3 class="mt-3" data-assistant-preview-label>Formatted suggestion preview</h3>
+            <p>This preview uses the content renderer. Embedded content is included; interactive controls are disabled.</p>
+            <iframe title="Formatted suggestion preview" data-assistant-formatted sandbox="allow-same-origin"
+                    style="width:100%;height:600px;border:1px solid #d9d9df;background:white"></iframe>
+        </div>
+        <button type="button" class="btn btn-primary mt-2" data-assistant-apply>Apply to draft</button>
+        <button type="button" class="btn btn-secondary mt-2" data-assistant-discard>Discard</button>
+    </div>
+</dialog>
+{{ encore_entry_script_tags('wizhippo-ibexa-content-assistant-js', null, 'ibexa') }}

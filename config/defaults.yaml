@@ -1,0 +1,10 @@
+parameters:
+    # Initial configurations; changes made in Admin > AI actions persist in Ibexa settings.
+    wizhippo_ibexa_content_assistant.actions:
+        author: {name: 'Write content', type: author, enabled: true, prompt: 'Write content from the editorial instructions using the existing document as context.'}
+        continue: {name: 'Continue writing', type: continue, enabled: true, prompt: 'Continue the document without repeating existing content.'}
+        rewrite: {name: 'Improve presentation', type: rewrite, enabled: true, prompt: 'Improve clarity and presentation while preserving meaning, facts, links and embedded content.'}
+        shorten: {name: 'Make shorter', type: shorten, enabled: true, prompt: 'Make the document more concise while preserving essential facts and embedded content.'}
+        expand: {name: 'Add detail', type: expand, enabled: true, prompt: 'Expand explanations without inventing facts or changing embedded content.'}
+        correct: {name: 'Correct spelling and grammar', type: correct, enabled: true, prompt: 'Correct spelling and grammar while preserving formatting and meaning.'}
+        professional: {name: 'Professional tone', type: rewrite, enabled: true, prompt: 'Use a professional, clear tone suitable for travel agents. Preserve facts, structure and embedded content.'}
