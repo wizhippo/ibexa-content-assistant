@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.resolve(__dirname, '../../assets/js/admin/content-assistant.js'), 'utf8');
 
-function editorPage(response = { suggestion: 'A new title' }, editor = null, emitReady = true) {
+function editorPage(response = { suggestion: 'A new title' }, editor = null, emitReady = true, customTags = {}) {
   const controls = new Map();
   for (const name of ['field', 'operation', 'scope', 'instructions', 'status', 'preview', 'plain', 'rich', 'formatted', 'preview-label', 'generate', 'source', 'result', 'apply', 'discard', 'close']) {
     controls.set(name, { value: '', hidden: name === 'preview', listeners: {}, addEventListener(type, listener) { this.listeners[type] = listener; } });
@@ -35,7 +35,7 @@ function editorPage(response = { suggestion: 'A new title' }, editor = null, emi
   }
   vm.runInNewContext(source, {
     document, Event, AbortSignal,
-    window: { location: { origin: 'https://localhost' }, ibexa: { BaseRichText: Adapter } },
+    window: { location: { origin: 'https://localhost' }, ibexa: { BaseRichText: Adapter, richText: { customTags } } },
     fetch: async (url, options) => { requests.push({ url, data: JSON.parse(options.body) }); return { ok: !response.error, json: async () => response }; },
   });
   if (editor && emitReady) listeners['ibexa-ckeditor:instance-ready']({ target: { closest: () => wrapper }, detail: { editor } });
@@ -107,7 +107,7 @@ test('RichText sends Ibexa editor XHTML and actual supported capabilities', asyn
   await page.click('generate');
   const request = page.requests[0].data;
   assert.match(request.richText, /http:\/\/ibexa.co\/namespaces\/ezpublish5\/xhtml5\/edit/);
-  assert.deepEqual(request.editorCapabilities, { headingLevels: [1, 2], tables: true, lists: true });
+  assert.deepEqual(request.editorCapabilities, { headingLevels: [1, 2], tables: true, customTags: [], lists: true });
   assert.equal('segments' in request, false);
   assert.equal(page.controls.get('plain').hidden, true);
   assert.equal(page.controls.get('rich').hidden, false);
@@ -190,4 +190,13 @@ test('read-only editors cannot open the toolbar action dialog', () => {
   editor.isReadOnly = true;
   page.openToolbar();
   assert.equal(page.panel.open, undefined);
+});
+
+test('RichText reports only custom-tag kinds supported by its editor schema', async () => {
+  const { editor } = richEditor();
+  const original = editor.model.schema.isRegistered;
+  editor.model.schema.isRegistered = (name) => name === 'customTag' || original(name);
+  const page = editorPage(richResponse, editor, true, { factbox: { isInline: false }, badge: { isInline: true } });
+  await page.click('generate');
+  assert.deepEqual(page.requests[0].data.editorCapabilities.customTags, ['factbox']);
 });

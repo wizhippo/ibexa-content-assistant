@@ -10,6 +10,7 @@ Schema-aware AI editor actions for **Ibexa 5**, powered by **Symfony AI**.
 - Process the entire unsaved RichText document or a selection,
   including headings, tables, lists, links, embedded content, and custom blocks.
 - Schema validation, formatted previews, preservation of embedded content, and undo.
+- Generate enabled custom tags using their configured attributes, defaults and choices.
 - Configurable provider and model, including OpenRouter-compatible Responses endpoints.
 
 Editors review suggestions before applying them to a draft, then save or publish

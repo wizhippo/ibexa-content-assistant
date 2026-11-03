@@ -18,6 +18,7 @@ final class RichTextContentAssistantService
     ) {
     }
 
+    /** @param array<string, mixed> $capabilities */
     public function validate(string $operation, string $instructions, string $xml, string $language, array $capabilities): void
     {
         $document = $this->processor->read($xml);
@@ -34,6 +35,14 @@ final class RichTextContentAssistantService
             || !is_bool($capabilities['tables']) || !is_bool($capabilities['lists'])) {
             throw new \InvalidArgumentException('The editor capabilities are missing or invalid. Reload the editor.');
         }
+        if (isset($capabilities['customTags']) && (!is_array($capabilities['customTags']) || !array_is_list($capabilities['customTags']))) {
+            throw new \InvalidArgumentException('Invalid custom tag capabilities. Reload the editor.');
+        }
+        foreach ($capabilities['customTags'] ?? [] as $tag) {
+            if (!is_string($tag) || !preg_match('/^[A-Za-z][A-Za-z0-9_-]*$/D', $tag)) {
+                throw new \InvalidArgumentException('Invalid custom tag identifier.');
+            }
+        }
         foreach ($capabilities['headingLevels'] as $level) {
             if (!is_int($level) || $level < 1 || $level > 6) {
                 throw new \InvalidArgumentException('Unsupported heading level.');
@@ -41,7 +50,11 @@ final class RichTextContentAssistantService
         }
     }
 
-    /** @return array{editXhtml: string, previewHtml: string} */
+    /**
+     * @param array<string, mixed> $capabilities
+     * @param array<string, mixed> $context
+     * @return array{editXhtml: string, previewHtml: string}
+     */
     public function suggest(string $operation, string $instructions, string $xml, string $language, array $capabilities, array $context = []): array
     {
         $this->validate($operation, $instructions, $xml, $language, $capabilities);

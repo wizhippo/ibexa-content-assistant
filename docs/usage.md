@@ -57,7 +57,7 @@ Incomplete, oversized, or invalid responses are rejected without applying partia
 1. Serialize the chosen content through Ibexa's `BaseRichText.xhtmlify()` helper,
    exactly as the native editor synchronizes its hidden form value. For selected
    content, use CKEditor's selected model fragment and data downcast pipeline.
-2. Send the editor XHTML and actual supported heading/table/list capabilities to
+2. Send the editor XHTML and actual supported heading/table/list/custom-tag capabilities to
    the authenticated application endpoint. Plain text fields use a separate text
    path. Legacy text-segment requests are rejected with a reload message.
 3. Convert editor XHTML to Ibexa DocBook through `InputHandlerInterface`, including
@@ -68,7 +68,9 @@ Incomplete, oversized, or invalid responses are rejected without applying partia
 5. Provide the model with an explicit Ibexa DocBook generation contract: namespace,
    section wrapper, supported heading levels, lists, formatting, link rules, and
    HTML-style DocBook tables (`informaltable/thead/tbody/tr/th/td`). Cells contain
-   paragraphs. Rewriting can restructure content and create headings and tables.
+   paragraphs. Include the enabled custom-tag definitions and their typed attributes,
+   required values, defaults and choices. Rewriting can restructure content and
+   create headings, tables and configured custom tags.
 6. Reject unsupported generated elements/attributes, external entity declarations,
    unsafe links, unsupported editor features, and invalid DocBook. Restore every
    protected object exactly once, unchanged, in its original relative order.
@@ -204,6 +206,64 @@ focus handling, disabled while the editor is read-only. It opens the shared dial
 for the owning field and retains the model selection for selected-content actions.
 Plain text fields retain their field-label buttons. Toolbar registration is limited
 to allowed editable fields with enabled actions.
+
+## Generating configured custom tags
+
+The assistant discovers custom tags through Ibexa's SiteAccess-aware configuration
+provider and intersects them with the tags available in the current editor. It sends
+the model tag identifiers, translated labels/descriptions, block/inline mode, and
+attribute types, required flags, defaults and choices. Template source, template
+paths and icons are not sent. The definitions count toward the shared model budget.
+
+For example, the installed Ibexa 5 configuration syntax for `factbox` is:
+
+```yaml
+ibexa_fieldtype_richtext:
+    custom_tags:
+        factbox:
+            template: 'field_type/richtext/custom_tag/factbox.html.twig'
+            icon: '/assets/images/icons.svg#factbox'
+            is_inline: false
+            label: 'Fact box'
+            description: 'Highlight important facts or travel advice.'
+            attributes:
+                title:
+                    type: string
+                    required: true
+                importance:
+                    type: choice
+                    default_value: info
+                    choices: [info, warning, critical]
+
+ibexa:
+    system:
+        admin_group:
+            fieldtypes:
+                ibexa_richtext:
+                    custom_tags: [factbox]
+```
+
+Merge `factbox` into your existing SiteAccess custom-tag list and provide its Twig
+template as usual. Use `default_value` and direct `choices`, rather than `default`
+and `options.choices`. Add useful labels/descriptions so the model can decide when
+the tag is appropriate. For example: “Put the important travel advice in a factbox
+with importance warning.”
+
+New tags use native DocBook `eztemplate` / `eztemplateinline`, with `ezcontent`
+followed by optional `ezconfig/ezvalue` attributes. The server rejects unknown or
+disabled tags, incorrect block/inline placement, missing required attributes,
+unknown/duplicate attribute keys, invalid choices/types, and markup inside scalar
+attribute values. Omitted attributes receive configured defaults. Supported types
+are `string`, `number`, `boolean`, `choice`, and `link`; tags using specialized
+attribute types are excluded until a matching validator is implemented. Newly
+created link attributes accept public/safe URL forms, without invented repository
+references.
+
+Existing custom tags and embeds remain opaque protected objects and are restored
+unchanged. The model can create new configured tags around editable prose, but
+does not rewrite attributes or content inside existing protected tags. New tags
+pass the installed Ibexa schema, native editor conversion, and Twig preview pipeline
+before editors can apply the suggestion.
 
 ## Controls and limits
 

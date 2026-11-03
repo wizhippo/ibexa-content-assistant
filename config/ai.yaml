@@ -24,7 +24,10 @@ ai:
                 use informaltable/thead/tbody/tr/th/td and para inside table cells.
                 Preserve every protected AI_KEEP_ placeholder as instructed by mode.
                 Existing embedded content and custom tags are restored by the server;
-                never invent, change or emit their markup. Do not emit Markdown, HTML,
+                never change their protected markup. You may create new custom tags only
+                from schema.custom_tags, following their block/inline placement, attribute
+                types, required values and choices. Use ezcontent before ezconfig.
+                Do not emit Markdown, HTML,
                 XML code fences, DOCTYPE, entities, CSS or scripts. Preserve facts and
                 original link URLs. The result must pass Ibexa's schema validation.
                 You cannot save or publish content.

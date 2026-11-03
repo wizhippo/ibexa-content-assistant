@@ -25,6 +25,7 @@ final class IbexaRichTextProcessor
         #[Autowire(service: Html5Edit::class)] private readonly Converter $editConverter,
         #[Autowire(service: 'ibexa.richtext.converter.output.xhtml5')] private readonly Converter $outputConverter,
         #[Autowire(param: 'wizhippo_ibexa_content_assistant.max_xml_bytes')] private readonly int $maxXmlBytes = 4194304,
+        private readonly ?RichTextCustomTagRegistry $customTags = null,
     ) {
     }
 
@@ -94,7 +95,11 @@ final class IbexaRichTextProcessor
         foreach ($ordered as $candidate) {
             $element = $candidate['node'];
             $token = 'AI_KEEP_'.bin2hex(random_bytes(12));
-            $protected[$token] = ['node' => $element->cloneNode(true), 'block' => $candidate['block']];
+            $copy = $element->cloneNode(true);
+            if (!$copy instanceof \DOMElement) {
+                throw new \UnexpectedValueException('A protected RichText element could not be copied.');
+            }
+            $protected[$token] = ['node' => $copy, 'block' => $candidate['block']];
             $replacement = $document->createTextNode($token);
             if ($candidate['block']) {
                 $paragraph = $document->createElementNS(self::DOCBOOK, 'para');
@@ -107,7 +112,10 @@ final class IbexaRichTextProcessor
         return ['xml' => (string)$document->saveXML(), 'protected' => $protected];
     }
 
-    /** @param array<string, array{node: \DOMElement, block: bool}> $protected */
+    /**
+     * @param array<string, array{node: \DOMElement, block: bool}> $protected
+     * @param array<string, mixed> $capabilities
+     */
     public function generated(string $xml, array $protected, \DOMDocument $source, bool $append, array $capabilities): \DOMDocument
     {
         try {
@@ -145,13 +153,22 @@ final class IbexaRichTextProcessor
         ];
     }
 
-    /** The generation contract is a subset of the installed, validated schema. */
+    /**
+     * The generation contract is a subset of the installed, validated schema.
+     * @param array<string, mixed> $capabilities
+     * @return array<string, mixed>
+     */
     public function contract(array $capabilities): array
     {
+        $tags = $this->customTags?->definitions($capabilities) ?? [];
+
         return [
             'format' => 'Ibexa 5 RichText DocBook XML, never HTML or Markdown',
             'root' => '<section xmlns="'.self::DOCBOOK.'" xmlns:ezxhtml="'.self::XHTML.'" xmlns:xlink="'.self::XLINK.'" version="5.0-variant ezpublish-1.0">...</section>',
-            'elements' => self::ELEMENTS,
+            'elements' => array_merge(self::ELEMENTS, $tags === [] ? [] : RichTextCustomTagRegistry::ELEMENTS),
+            'custom_tags' => $tags,
+            'custom_tag_format' => '<eztemplate name="configured_name"><ezcontent><para>Block content</para></ezcontent><ezconfig><ezvalue key="configured_attribute">Plain text value</ezvalue></ezconfig></eztemplate>',
+            'custom_tag_rules' => 'Only use names in custom_tags. Use the specified element: eztemplate for blocks, eztemplateinline inside paragraphs for inline tags. Always include ezcontent first, then optional ezconfig with plain-text ezvalue children keyed by configured attribute names. Inline ezcontent contains inline text, never paragraphs. Supply required attributes; use only configured choices and valid types. Omitted attributes receive configured defaults. Do not invent facts, URLs, content IDs or configuration values. Use labels and descriptions to decide when a tag is appropriate.',
             'heading_levels' => $capabilities['headingLevels'],
             'tables' => $capabilities['tables'],
             'lists' => $capabilities['lists'],
@@ -165,7 +182,7 @@ final class IbexaRichTextProcessor
                 '<informaltable border="1"><thead><tr><th><para>Column</para></th></tr></thead><tbody><tr><td><para>Value</para></td></tr></tbody></informaltable>',
                 '<para><link xlink:href="https://example.com" xlink:show="none">Link label</link></para>',
             ],
-            'rules' => 'Copy the namespace URIs from namespaces exactly; never change them or insert additional path segments. Table cells and list items contain para elements. Preserve original link URLs and all AI_KEEP_ tokens exactly once, in order. A block token stays alone in its para; an inline token stays inline. Never create embeds, custom tags, scripts, styles, DOCTYPE, entities, or new internal content references. You may restructure prose into headings, lists and tables according to the instructions and supported capabilities.',
+            'rules' => 'Copy the namespace URIs from namespaces exactly; never change them or insert additional path segments. Table cells and list items contain para elements. Preserve original link URLs and all AI_KEEP_ tokens exactly once, in order. A block token stays alone in its para; an inline token stays inline. Never create embeds, unlisted custom tags, scripts, custom styles, DOCTYPE, entities, or new internal content references. You may restructure prose into headings, lists and tables according to the instructions and supported capabilities.',
         ];
     }
 
@@ -193,11 +210,18 @@ final class IbexaRichTextProcessor
         }
     }
 
+    /** @param array<string, mixed> $capabilities */
     private function assertGeneratedElements(\DOMDocument $document, array $capabilities): void
     {
+        $tags = $this->customTags?->definitions($capabilities) ?? [];
+        $this->customTags?->validate($document, $tags);
         foreach ($document->getElementsByTagName('*') as $element) {
-            if ($element->namespaceURI !== self::DOCBOOK || !in_array($element->localName, self::ELEMENTS, true)) {
+            $customTagElement = $tags !== [] && in_array($element->localName, RichTextCustomTagRegistry::ELEMENTS, true);
+            if ($element->namespaceURI !== self::DOCBOOK || (!in_array($element->localName, self::ELEMENTS, true) && !$customTagElement)) {
                 throw new \UnexpectedValueException('Unsupported generated element.');
+            }
+            if ($customTagElement) {
+                continue; // Custom tag attributes and structure were checked by the registry.
             }
             foreach ($element->attributes as $attribute) {
                 if ($attribute->namespaceURI === 'http://www.w3.org/2000/xmlns/') {

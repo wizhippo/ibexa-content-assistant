@@ -105,6 +105,11 @@ const initialise = () => {
           editor.model.schema.isRegistered(`heading${level}`),
         ),
         tables: editor.model.schema.isRegistered('table'),
+        customTags: Object.entries(window.ibexa.richText?.customTags || {})
+          .filter(([, configuration]) => editor.model.schema.isRegistered(
+            configuration.isInline ? 'inlineCustomTag' : 'customTag',
+          ))
+          .map(([name]) => name),
         lists:
           editor.plugins.has('List') || editor.plugins.has('ListProperties'),
       };
