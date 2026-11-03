@@ -59,8 +59,15 @@ final class ContentAssistantActionRegistryTest extends TestCase
         yield 'image actions' => ['image', array_replace(self::ACTION, ['type' => 'image_to_text'])];
         yield 'missing name' => ['friendly', array_replace(self::ACTION, ['name' => ''])];
         yield 'missing prompt' => ['friendly', array_replace(self::ACTION, ['prompt' => ''])];
-        yield 'prompt too long' => ['friendly', array_replace(self::ACTION, ['prompt' => str_repeat('a', 2001)])];
         yield 'duplicate id' => ['rewrite', self::ACTION];
+    }
+
+    public function testLongInstructionsCanBeStoredWithoutAnEditorialCharacterCap(): void
+    {
+        $registry = $this->registry();
+        $action = array_replace(self::ACTION, ['prompt' => str_repeat('Detailed instructions. ', 500)]);
+        $registry->save('long_prompt', $action, $registry->revision(), true);
+        self::assertSame($action['prompt'], $registry->get('long_prompt')['prompt']);
     }
 
     private function registry(): ContentAssistantActionRegistry

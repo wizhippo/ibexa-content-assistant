@@ -26,7 +26,7 @@ final class ContentAssistantEndpointTest extends KernelTestCase
                 self::assertSame(['Authorization: Bearer test-provider-key'], $options['normalized_headers']['authorization']);
                 $payload = json_decode($options['body'], true, 512, JSON_THROW_ON_ERROR);
                 self::assertSame($model, $payload['model']);
-                self::assertSame(8000, $payload['max_output_tokens']);
+                self::assertSame(128000, $payload['max_output_tokens']);
                 self::assertArrayHasKey('input', $payload);
 
                 return new MockResponse(json_encode([

@@ -58,8 +58,6 @@ final class ContentAssistantServiceTest extends TestCase
         yield 'unsupported action' => ['publish', '', 'Text', 'eng-GB'];
         yield 'author needs instructions' => ['author', '  ', '', 'eng-GB'];
         yield 'rewrite needs source' => ['rewrite', '', '  ', 'eng-GB'];
-        yield 'source too long' => ['rewrite', '', str_repeat('é', 12001), 'eng-GB'];
-        yield 'instructions too long' => ['author', str_repeat('a', 2001), '', 'eng-GB'];
         yield 'invalid language' => ['rewrite', '', 'Text', 'English'];
     }
 
@@ -76,7 +74,6 @@ final class ContentAssistantServiceTest extends TestCase
     public static function invalidSuggestions(): iterable
     {
         yield 'empty output' => ['   '];
-        yield 'oversized output' => [str_repeat('a', 16001)];
     }
 
     public function testExtractsVisibleTextFromReasoningModelResponse(): void
@@ -107,6 +104,16 @@ final class ContentAssistantServiceTest extends TestCase
 
         self::assertSame('First paragraph. Second paragraph.', (new ContentAssistantService($agent))->suggest(
             'author', 'Write a welcome.', '', 'eng-GB'
+        ));
+    }
+
+    public function testSourceInstructionsAndOutputHaveNoIndependentCharacterCaps(): void
+    {
+        $output = str_repeat('Long response. ', 2000);
+        $agent = $this->createMock(AgentInterface::class);
+        $agent->method('call')->willReturn(self::execution($output));
+        self::assertSame(trim($output), (new ContentAssistantService($agent))->suggest(
+            'rewrite', str_repeat('Instructions. ', 500), str_repeat('Source. ', 3000), 'eng-GB'
         ));
     }
 

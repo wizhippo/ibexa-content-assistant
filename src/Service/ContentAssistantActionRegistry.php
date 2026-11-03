@@ -57,9 +57,9 @@ final class ContentAssistantActionRegistry
         if (!preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $identifier)
             || !isset(self::TYPES[$action['type'] ?? ''])
             || !is_string($action['name'] ?? null) || trim($action['name']) === '' || mb_strlen($action['name']) > 100
-            || !is_string($action['prompt'] ?? null) || trim($action['prompt']) === '' || mb_strlen($action['prompt']) > 2000
+            || !is_string($action['prompt'] ?? null) || trim($action['prompt']) === ''
             || !is_bool($action['enabled'] ?? null)) {
-            throw new \InvalidArgumentException('Provide an identifier, a name (up to 100 characters), an editor action type and instructions (up to 2000 characters).');
+            throw new \InvalidArgumentException('Provide an identifier, a name (up to 100 characters), an editor action type and non-empty instructions.');
         }
         $this->change($revision, static function (array $actions) use ($identifier, $action, $create): array {
             if ($create === isset($actions[$identifier])) {

@@ -45,6 +45,8 @@ Configure allowed content in `config/packages/wizhippo_ibexa_content_assistant.y
 ```yaml
 wizhippo_ibexa_content_assistant:
     enabled: '%env(bool:WIZHIPPO_IBEXA_CONTENT_ASSISTANT_ENABLED)%'
+    context_window: 1050000
+    max_output_tokens: 128000
     fields:
         article: [title, body]
 ```
@@ -54,7 +56,7 @@ The bundle starts disabled with no allowed fields. Set these variables in
 
 ```dotenv
 WIZHIPPO_IBEXA_CONTENT_ASSISTANT_ENABLED=1
-WIZHIPPO_IBEXA_CONTENT_ASSISTANT_MODEL=gpt-4.1-mini
+WIZHIPPO_IBEXA_CONTENT_ASSISTANT_MODEL=gpt-6.1-terra
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_API_KEY=your-api-key
 ```
@@ -64,8 +66,13 @@ OpenRouter example:
 ```dotenv
 OPENAI_BASE_URL=https://openrouter.ai/api/v1
 OPENAI_API_KEY=your-openrouter-key
-WIZHIPPO_IBEXA_CONTENT_ASSISTANT_MODEL=openai/gpt-4.1-mini
+WIZHIPPO_IBEXA_CONTENT_ASSISTANT_MODEL=openai/gpt-6.1-terra
 ```
+
+The default model is `gpt-6.1-terra`, with a configurable 1,050,000-token context
+budget and 128,000-token output budget. When choosing another model, update both
+budgets to match it. Input is conservatively estimated from UTF-8 bytes because
+the fallback catalog has no tokenizer; see [budget configuration](docs/usage.md#configuration-and-setup).
 
 The bridge appends `/responses`; include the API version path in the base URL.
 

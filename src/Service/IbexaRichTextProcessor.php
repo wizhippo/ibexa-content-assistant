@@ -16,7 +16,6 @@ final class IbexaRichTextProcessor
     public const string DOCBOOK = 'http://docbook.org/ns/docbook';
     public const string XHTML = 'http://ibexa.co/xmlns/dxp/docbook/xhtml';
     public const string XLINK = 'http://www.w3.org/1999/xlink';
-    public const int MAX_XML_BYTES = 128000;
     private const array ELEMENTS = ['section', 'title', 'para', 'emphasis', 'link', 'itemizedlist', 'orderedlist', 'listitem', 'informaltable', 'thead', 'tbody', 'tr', 'th', 'td', 'blockquote', 'literallayout', 'subscript', 'superscript'];
     private const array ATTRIBUTES = ['version', 'id', 'role', 'level', 'href', 'show', 'width', 'border', 'colspan', 'rowspan', 'scope', 'startingnumber', 'numeration'];
 
@@ -25,6 +24,7 @@ final class IbexaRichTextProcessor
         #[Autowire(service: 'ibexa.richtext.validator.docbook')] private readonly ValidatorInterface $validator,
         #[Autowire(service: Html5Edit::class)] private readonly Converter $editConverter,
         #[Autowire(service: 'ibexa.richtext.converter.output.xhtml5')] private readonly Converter $outputConverter,
+        #[Autowire(param: 'wizhippo_ibexa_content_assistant.max_xml_bytes')] private readonly int $maxXmlBytes = 4194304,
     ) {
     }
 
@@ -188,7 +188,7 @@ final class IbexaRichTextProcessor
 
     private function guardXml(string $xml): void
     {
-        if (strlen($xml) > self::MAX_XML_BYTES || preg_match('/<!\s*(?:DOCTYPE|ENTITY)/i', $xml)) {
+        if (strlen($xml) > $this->maxXmlBytes || preg_match('/<!\s*(?:DOCTYPE|ENTITY)/i', $xml)) {
             throw new \InvalidArgumentException('RichText XML is too large or contains a prohibited document declaration.');
         }
     }

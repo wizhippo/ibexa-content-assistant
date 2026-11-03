@@ -11,7 +11,7 @@ services:
         resource: '../src/Controller/'
         tags: ['controller.service_arguments']
 
-    # Accept provider-specific identifiers such as openai/gpt-4.1-mini.
+    # Accept provider-specific identifiers such as openai/gpt-6.1-terra.
     wizhippo_ibexa_content_assistant.model_catalog:
         class: Symfony\AI\Platform\Bridge\OpenResponses\FallbackModelCatalog
 

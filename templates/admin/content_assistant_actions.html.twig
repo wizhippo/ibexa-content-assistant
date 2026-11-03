@@ -29,7 +29,7 @@
         <label class="d-block mb-2">Identifier<input class="form-control" name="identifier" value="{{ identifier }}" pattern="[a-z][a-z0-9_]{0,63}" maxlength="64" required {{ editing ? 'readonly' }}></label>
         <label class="d-block mb-2">Name<input class="form-control" name="name" value="{{ configuration.name }}" maxlength="100" required></label>
         <label class="d-block mb-2">Action type<select class="form-select" name="type">{% for id, label in types %}<option value="{{ id }}" {{ configuration.type == id ? 'selected' }}>{{ label }}</option>{% endfor %}</select></label>
-        <label class="d-block mb-2">Instructions<textarea class="form-control" rows="4" name="prompt" maxlength="2000" required>{{ configuration.prompt }}</textarea></label>
+        <label class="d-block mb-2">Instructions<textarea class="form-control" rows="4" name="prompt" required>{{ configuration.prompt }}</textarea></label>
         <label class="d-block mb-2"><input type="checkbox" name="enabled" value="1" {{ configuration.enabled ? 'checked' }}> Enabled</label>
         <button class="btn btn-primary" name="operation" value="{{ editing ? 'update' : 'create' }}">Save action</button>
         {% if editing %}<a class="btn btn-secondary" href="{{ path('wizhippo_ibexa_content_assistant_actions') }}">Cancel</a>{% endif %}

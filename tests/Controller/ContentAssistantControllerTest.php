@@ -65,7 +65,7 @@ final class ContentAssistantControllerTest extends TestCase
         yield 'invalid configuration' => [['action' => []], true, 422];
         yield 'unsupported operation' => [['operation' => 'publish'], true, 422];
         yield 'no instructions' => [['instructions' => ''], true, 422];
-        yield 'too much source' => [['source' => str_repeat('a', 12001)], true, 422];
+        yield 'request resource limit' => [['source' => str_repeat('a', 8388608)], true, 413];
         yield 'invalid segments' => [['segments' => 'invalid'], true, 400];
         yield 'outdated segments' => [['segments' => ['Text']], true, 400];
         yield 'invalid rich text' => [['richText' => 12], true, 400];
@@ -139,6 +139,15 @@ final class ContentAssistantControllerTest extends TestCase
         self::assertSame(502, $response->getStatusCode());
         self::assertStringContainsString('OPENAI_API_KEY', $response->getContent());
         self::assertStringNotContainsString('secret-provider-value', $response->getContent());
+    }
+
+    public function testContextBudgetFailureReturnsAnActionableValidationError(): void
+    {
+        [$controller, $arguments, $agent] = $this->fixture();
+        $agent->method('call')->willThrowException(new \Wizhippo\IbexaContentAssistant\Exception\ContextWindowExceeded('The complete request exceeds the configured model context budget.'));
+        $response = $controller->suggest($this->request(), ...$arguments);
+        self::assertSame(422, $response->getStatusCode());
+        self::assertStringContainsString('context budget', $response->getContent());
     }
 
     private static function richText(string $body): string

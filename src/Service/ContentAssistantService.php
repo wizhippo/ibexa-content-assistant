@@ -12,9 +12,6 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 final class ContentAssistantService
 {
     public const array OPERATIONS = ['author', 'continue', 'rewrite', 'shorten', 'expand', 'correct'];
-    public const int MAX_SOURCE_LENGTH = 12000;
-    public const int MAX_INSTRUCTIONS_LENGTH = 2000;
-    public const int MAX_OUTPUT_LENGTH = 16000;
 
     public function __construct(
         #[Autowire(service: 'ai.agent.wizhippo_ibexa_content_assistant', lazy: true)] private readonly AgentInterface $agent,
@@ -33,7 +30,7 @@ final class ContentAssistantService
         ] + ($context === [] ? [] : ['action_context' => $context]), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)));
 
         $result = $this->agent->call($messages)->asText();
-        if (trim($result) === '' || mb_strlen($result) > self::MAX_OUTPUT_LENGTH) {
+        if (trim($result) === '') {
             throw new \UnexpectedValueException('The provider returned an unusable suggestion.');
         }
 
@@ -44,9 +41,6 @@ final class ContentAssistantService
     {
         if (!in_array($operation, self::OPERATIONS, true)) {
             throw new \InvalidArgumentException('Unsupported operation.');
-        }
-        if (mb_strlen($source) > self::MAX_SOURCE_LENGTH || mb_strlen($instructions) > self::MAX_INSTRUCTIONS_LENGTH) {
-            throw new \InvalidArgumentException('Source text or instructions exceed the allowed length.');
         }
         if ($operation === 'author' ? trim($instructions) === '' : trim($source) === '') {
             throw new \InvalidArgumentException('Authoring requires instructions; rewriting requires source text.');

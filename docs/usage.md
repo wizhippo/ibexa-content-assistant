@@ -46,10 +46,11 @@ Administration forms reject stale revisions, and configuration writes use a file
 lock in the project's `var` directory. Deployments with multiple application nodes
 must share that lock directory or replace the lock store with a distributed store.
 Configurations are repository-wide; the existing field allowlist remains in YAML.
-User and configuration instructions are separately bounded to 2000 characters.
-RichText uses the complete XML document up to 128,000 bytes, including embed-only
-content; it is not restricted by the plain text field's 12,000-character limit.
-Oversized or invalid model responses are rejected without applying partial content.
+Source content and both instruction inputs share the configured model context
+budget. RichText uses the complete XML document, including embed-only content;
+there are no independent editorial character limits. The agent checks the complete
+request after injecting the system prompt and reserves output tokens and overhead.
+Incomplete, oversized, or invalid responses are rejected without applying partial content.
 
 ## Native RichText pipeline
 
@@ -125,7 +126,7 @@ whether the content changed, and native undo restores the previous content.
    ```dotenv
    OPENAI_BASE_URL=https://openrouter.ai/api/v1
    OPENAI_API_KEY=your-openrouter-api-key
-   WIZHIPPO_IBEXA_CONTENT_ASSISTANT_MODEL=openai/gpt-4.1-mini
+   WIZHIPPO_IBEXA_CONTENT_ASSISTANT_MODEL=openai/gpt-6.1-terra
    ```
 
    Provider-prefixed model identifiers are accepted without catalog changes.
@@ -140,8 +141,8 @@ whether the content changed, and native undo restores the previous content.
    ```yaml
    wizhippo_ibexa_content_assistant:
        fields:
-       article: [title, body]
-       knowledge_library_category: [title, body]
+           article: [title, body]
+           knowledge_library_category: [title, body]
    ```
 
 5. Assign `wizhippo_ibexa_content_assistant/use` to the intended Ibexa editorial role.
@@ -155,6 +156,41 @@ whether the content changed, and native undo restores the previous content.
    php bin/console cache:clear
    ```
 
+The fallback Responses catalog does not supply context sizes or tokenizer metadata.
+The default budgets use the supplied Terra capacities; they are not automatically
+discovered from a provider. When selecting another model, configure its supported
+context and output budgets together:
+
+```yaml
+wizhippo_ibexa_content_assistant:
+    context_window: 1050000
+    max_output_tokens: 128000
+    token_safety_margin: 1024
+    max_request_bytes: 8388608
+    max_xml_bytes: 4194304
+    max_response_bytes: 4194304
+```
+
+`WIZHIPPO_IBEXA_CONTENT_ASSISTANT_CONTEXT_WINDOW` can override the default context
+budget when `context_window` is not explicitly set in YAML. Existing model
+environment overrides remain in effect; switching the bundle default does not
+replace deployment settings. `max_output_tokens` is both the provider request
+limit and the output space reserved by the context check. Keep the sum of output
+tokens and safety margin below the context window. A smaller output budget leaves
+more room for input. The provider may also impose a separate input limit.
+
+Without a model tokenizer, input tokens are conservatively estimated as one token
+per UTF-8 byte of all system and user message text, including the JSON payload,
+action configuration, schema, and protected RichText. This is an upper estimate
+for byte-based tokenizers, not an exact token count; it can reject documents that
+a model tokenizer would fit. It avoids the unsafe assumption that every token
+represents four characters. The safety margin covers message framing and provider
+overhead. Requests exceeding this budget return HTTP 422 before a provider call.
+Nothing is silently truncated. Provider-reported incomplete responses or output
+usage exceeding the configured budget are rejected before content is offered.
+Increase resource ceilings separately if needed, alongside web server/PHP request
+limits. Large generations must also finish within the configured HTTP deadline.
+
 The assistant has its own `wizhippo-ibexa-content-assistant-js` entry, so failures in unrelated
 editor scripts do not prevent its initialization. Hard-refresh an already open
 editor after an asset rebuild.
@@ -164,9 +200,12 @@ editor after an asset rebuild.
 - Authenticated requests, CSRF tokens, field allowlist, dedicated policy, and normal
   Ibexa permission checks including field/language limitation targets.
 - Ten requests per user per minute, configurable in the content assistant package.
-- Plain fields: up to 12,000 source characters. RichText: complete XML up to 128,000 bytes. Each instruction input: up to 2,000 characters.
-- Native XML input/output up to 128 KB; complete request up to 256 KB.
-- Provider output budget of 8,000 tokens; HTTP deadline of 60 seconds.
+- Shared model context budget, with configurable output reservation and safety margin.
+- Separate resource ceilings: XML and visible responses up to 4 MiB; complete
+  incoming JSON request up to 8 MiB. These are configurable and protect application
+  memory and parsing independently of the model context.
+- Default model: `gpt-6.1-terra`, context budget 1,050,000 tokens, output budget
+  128,000 tokens, and safety margin 1,024 tokens. HTTP deadline: 60 seconds.
 - XML is parsed with network access disabled; supplied DTD/entity declarations,
   arbitrary generated elements, scripts, styles, and unsafe link protocols are
   rejected before conversion. Existing protected nodes are restored by the server.

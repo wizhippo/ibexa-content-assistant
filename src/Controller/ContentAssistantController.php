@@ -15,6 +15,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
+use Wizhippo\IbexaContentAssistant\Exception\ContextWindowExceeded;
 use Wizhippo\IbexaContentAssistant\Exception\InvalidRichTextSuggestion;
 use Wizhippo\IbexaContentAssistant\Service\ContentAssistantAccess;
 use Wizhippo\IbexaContentAssistant\Service\ContentAssistantActionRegistry;
@@ -37,6 +38,7 @@ final class ContentAssistantController extends AbstractController
         LoggerInterface $logger,
         #[Autowire(service: 'limiter.wizhippo_ibexa_content_assistant')] RateLimiterFactory $limiter,
         ContentAssistantActionRegistry $actions,
+        #[Autowire(param: 'wizhippo_ibexa_content_assistant.max_request_bytes')] int $maxRequestBytes = 8388608,
     ): JsonResponse {
         if (!$access->isAvailable()) {
             return $this->json(['error' => 'The content assistant is unavailable for this account.'], 403);
@@ -44,7 +46,7 @@ final class ContentAssistantController extends AbstractController
         if (!$this->isCsrfTokenValid('wizhippo_ibexa_content_assistant', $request->headers->get('X-CSRF-Token'))) {
             return $this->json(['error' => 'Your session expired. Reload the editor.'], 403);
         }
-        if (strlen($request->getContent()) > 262144) {
+        if (strlen($request->getContent()) > $maxRequestBytes) {
             return $this->json(['error' => 'The request is too large.'], 413);
         }
         try {
@@ -110,6 +112,8 @@ final class ContentAssistantController extends AbstractController
             $result = isset($data['richText'])
                 ? $richTextAssistant->suggest($data['operation'], $data['instructions'], $data['richText'], $data['language'], $data['editorCapabilities'], $context)
                 : ['suggestion' => $assistant->suggest($data['operation'], $data['instructions'], $data['source'], $data['language'], $context)];
+        } catch (ContextWindowExceeded $exception) {
+            return $this->json(['error' => $exception->getMessage()], 422);
         } catch (InvalidRichTextSuggestion $exception) {
             return $this->json(['error' => $exception->getMessage()], 502);
         } catch (\Throwable $exception) {

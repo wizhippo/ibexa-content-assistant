@@ -4,8 +4,6 @@ ai:
             platform: 'ai.platform.openresponses.wizhippo_ibexa_content_assistant'
             model:
                 name: '%env(WIZHIPPO_IBEXA_CONTENT_ASSISTANT_MODEL)%'
-                options:
-                    max_output_tokens: 8000
             prompt: |
                 You are an editorial assistant for Ibexa content.
                 Follow the requested operation, the configured action_context configuration prompt,
