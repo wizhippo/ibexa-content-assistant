@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.resolve(__dirname, '../../assets/js/admin/content-assistant.js'), 'utf8');
 
-function editorPage(response = { suggestion: 'A new title' }, editor = null) {
+function editorPage(response = { suggestion: 'A new title' }, editor = null, emitReady = true) {
   const controls = new Map();
   for (const name of ['field', 'operation', 'scope', 'instructions', 'status', 'preview', 'plain', 'rich', 'formatted', 'preview-label', 'generate', 'source', 'result', 'apply', 'discard', 'close']) {
     controls.set(name, { value: '', hidden: name === 'preview', listeners: {}, addEventListener(type, listener) { this.listeners[type] = listener; } });
@@ -38,8 +38,8 @@ function editorPage(response = { suggestion: 'A new title' }, editor = null) {
     window: { location: { origin: 'https://localhost' }, ibexa: { BaseRichText: Adapter } },
     fetch: async (url, options) => { requests.push({ url, data: JSON.parse(options.body) }); return { ok: !response.error, json: async () => response }; },
   });
-  if (editor) listeners['ibexa-ckeditor:instance-ready']({ target: { closest: () => wrapper }, detail: { editor } });
-  return { controls, input, requests, panel, launchers, click: (name) => controls.get(name).listeners.click() };
+  if (editor && emitReady) listeners['ibexa-ckeditor:instance-ready']({ target: { closest: () => wrapper }, detail: { editor } });
+  return { controls, input, requests, panel, launchers, openToolbar: () => listeners['wizhippo-content-assistant:open']({ target: { closest: () => wrapper }, detail: { editor } }), click: (name) => controls.get(name).listeners.click() };
 }
 
 function richEditor() {
@@ -144,10 +144,10 @@ test('rendered preview is sandboxed without script permissions', () => {
   assert.doesNotMatch(template, /allow-scripts/);
 });
 
-test('field AI action control opens a dialog for the entire field and closing discards the preview', async () => {
+test('RichText toolbar action opens the field dialog and closing discards the preview', async () => {
   const { editor } = richEditor(); const page = editorPage(richResponse, editor);
-  assert.equal(page.launchers[1].textContent, 'AI actions');
-  page.launchers[1].listeners.click();
+  assert.equal(page.launchers.length, 1, 'RichText has no separate field-label button');
+  page.openToolbar();
   assert.equal(page.panel.open, true);
   assert.equal(page.controls.get('field').value, 'body');
   assert.equal(page.controls.get('scope').value, 'field');
@@ -166,4 +166,28 @@ test('custom action configurations use the developer action type for continuatio
   assert.equal(page.requests[0].data.operation, 'continue');
   page.click('apply');
   assert.equal(page.input.value, 'Original title\n\nContinued body.');
+});
+
+test('plain fields retain their field-label launcher', () => {
+  const page = editorPage();
+  assert.equal(page.launchers[1].textContent, 'AI actions');
+  page.launchers[1].listeners.click();
+  assert.equal(page.panel.open, true);
+  assert.equal(page.controls.get('field').value, 'title');
+});
+test('toolbar opening retains the model selection even when instance-ready was missed', async () => {
+  const { editor } = richEditor();
+  const page = editorPage(richResponse, editor, false);
+  page.controls.get('scope').value = 'selection';
+  page.openToolbar();
+  await page.click('generate');
+  assert.equal(page.panel.open, true);
+  assert.match(page.requests[0].data.richText, /Selected content/);
+});
+test('read-only editors cannot open the toolbar action dialog', () => {
+  const { editor } = richEditor();
+  const page = editorPage(richResponse, editor);
+  editor.isReadOnly = true;
+  page.openToolbar();
+  assert.equal(page.panel.open, undefined);
 });

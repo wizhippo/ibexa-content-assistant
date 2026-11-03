@@ -255,6 +255,7 @@ const initialise = () => {
     );
     // Field controls open one shared dialog, retaining CKEditor's model selection.
     if (document.createElement) {
+      const richTextFields = new Map();
       const open = (identifier) => {
         discard();
         if (identifier) find('field').value = identifier;
@@ -280,7 +281,14 @@ const initialise = () => {
           node.name.includes(`[fieldsData][${option.value}][value]`),
         );
         const wrapper = input?.closest('.ibexa-field-edit');
-        if (wrapper && !input.disabled && !input.readOnly) {
+        if (
+          wrapper && !input.disabled && !input.readOnly &&
+          !wrapper.classList.contains('ibexa-field-edit--nontranslatable')
+        ) {
+          if (wrapper.classList.contains('ibexa-field-edit--ibexa_richtext')) {
+            richTextFields.set(wrapper, { identifier: option.value, input });
+            continue;
+          }
           const labelRow = wrapper.querySelector(
             '.ibexa-field-edit__label-wrapper',
           );
@@ -295,6 +303,16 @@ const initialise = () => {
           }
         }
       }
+      document.addEventListener('wizhippo-content-assistant:open', (event) => {
+        const wrapper = event.target.closest('.ibexa-field-edit');
+        const field = richTextFields.get(wrapper);
+        const editor = event.detail.editor;
+        if (!field || field.input.disabled || field.input.readOnly || editor.isReadOnly)
+          return;
+        // Also retain the instance if this script loaded after instance-ready.
+        editors.set(wrapper, editor);
+        open(field.identifier);
+      });
       find('close').addEventListener('click', () => panel.close());
       panel.addEventListener('close', discard);
     }

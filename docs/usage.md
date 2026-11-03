@@ -22,8 +22,8 @@ are excluded.
   action type and an administrator-defined prompt. Types cover writing,
   continuation, refinement, shortening, expansion and correction. All use the
   existing Symfony AI agent and its configured model/provider.
-- **AI actions** beside each allowed editable field opens the action dialog for
-  that field. Entire field is the default scope; RichText selections include the
+- **AI actions** in each allowed RichText editor toolbar (and beside plain text
+  fields) opens the action dialog for that field. Entire field is the default scope; RichText selections include the
   complete selected model fragment, including formatting and embedded content.
 - Choose an enabled configuration, add instructions (required for writing), generate, review the
   formatted preview, then Apply to draft or Discard. Apply remains undoable in
@@ -152,8 +152,9 @@ whether the content changed, and native undo restores the previous content.
 6. Build the Ibexa assets:
 
    ```bash
-   php bin/console ibexa:encore:compile --frontend-configs-name ibexa
    php bin/console cache:clear
+   php bin/console ibexa:encore:compile --frontend-configs-name ibexa
+   php bin/console ibexa:encore:compile --frontend-configs-name richtext
    ```
 
 The fallback Responses catalog does not supply context sizes or tokenizer metadata.
@@ -191,9 +192,18 @@ usage exceeding the configured budget are rejected before content is offered.
 Increase resource ceilings separately if needed, alongside web server/PHP request
 limits. Large generations must also finish within the configured HTTP deadline.
 
-The assistant has its own `wizhippo-ibexa-content-assistant-js` entry, so failures in unrelated
-editor scripts do not prevent its initialization. Hard-refresh an already open
-editor after an asset rebuild.
+The dialog has its own `wizhippo-ibexa-content-assistant-js` entry. The toolbar
+plugin is added to Ibexa's `ibexa-richtext-onlineeditor-js` entry through
+`Resources/encore/ibexa.richtext.config.manager.js`, sharing the editor's CKEditor
+modules. Clear the application cache before rebuilding both `ibexa` and `richtext`
+assets so Ibexa discovers this configuration manager. Hard-refresh an already open
+editor after rebuilding.
+
+RichText has a native **AI actions** toolbar button, with CKEditor's keyboard and
+focus handling, disabled while the editor is read-only. It opens the shared dialog
+for the owning field and retains the model selection for selected-content actions.
+Plain text fields retain their field-label buttons. Toolbar registration is limited
+to allowed editable fields with enabled actions.
 
 ## Controls and limits
 
@@ -249,7 +259,7 @@ or additional provider call is made.
 
 ```bash
 php vendor/bin/phpunit --filter 'ContentAssistant|IbexaRichTextProcessor'
-node vendor/wizhippo/ibexa-content-assistant/tests/JavaScript/content-assistant.test.cjs
+node --test vendor/wizhippo/ibexa-content-assistant/tests/JavaScript/*.test.cjs
 ```
 
 Automated tests use mocked model responses. Native integration tests exercise the

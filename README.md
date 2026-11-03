@@ -6,7 +6,7 @@ Schema-aware AI editor actions for **Ibexa 5**, powered by **Symfony AI**.
 
 - Reusable action configurations managed in **Admin → AI actions**.
 - Write, continue, refine, shorten, expand, correct spelling, and adjust tone.
-- AI actions alongside enabled fields in the content editor.
+- AI actions in the RichText editor toolbar and beside enabled plain text fields.
 - Process the entire unsaved RichText document or a selection,
   including headings, tables, lists, links, embedded content, and custom blocks.
 - Schema validation, formatted previews, preservation of embedded content, and undo.
@@ -81,6 +81,7 @@ Build the Ibexa assets and clear the application cache:
 ```sh
 php bin/console cache:clear
 php bin/console ibexa:encore:compile --frontend-configs-name ibexa
+php bin/console ibexa:encore:compile --frontend-configs-name richtext
 ```
 
 ## Permissions and persistence
@@ -106,7 +107,7 @@ From a standalone bundle checkout:
 ```sh
 composer install
 vendor/bin/phpunit
-node tests/JavaScript/content-assistant.test.cjs
+node --test tests/JavaScript/*.test.cjs
 ```
 
 The default suite runs without an application kernel. Integration tests require
