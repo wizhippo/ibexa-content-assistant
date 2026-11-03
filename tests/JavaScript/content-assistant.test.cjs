@@ -146,7 +146,7 @@ test('rendered preview is sandboxed without script permissions', () => {
 
 test('RichText toolbar action opens the field dialog and closing discards the preview', async () => {
   const { editor } = richEditor(); const page = editorPage(richResponse, editor);
-  assert.equal(page.launchers.length, 1, 'RichText has no separate field-label button');
+  assert.equal(page.launchers.length, 0, 'RichText uses only its toolbar launcher');
   page.openToolbar();
   assert.equal(page.panel.open, true);
   assert.equal(page.controls.get('field').value, 'body');
@@ -170,8 +170,9 @@ test('custom action configurations use the developer action type for continuatio
 
 test('plain fields retain their field-label launcher', () => {
   const page = editorPage();
-  assert.equal(page.launchers[1].textContent, 'AI actions');
-  page.launchers[1].listeners.click();
+  assert.equal(page.launchers.length, 1, 'Plain fields use only their field-label launcher');
+  assert.equal(page.launchers[0].textContent, 'AI actions');
+  page.launchers[0].listeners.click();
   assert.equal(page.panel.open, true);
   assert.equal(page.controls.get('field').value, 'title');
 });

@@ -280,7 +280,6 @@ const initialise = () => {
         button.addEventListener('click', () => open(identifier));
         return button;
       };
-      panel.before(launcher('AI actions'));
       for (const option of find('field').options) {
         const input = Array.from(
           document.querySelectorAll('input[name], textarea[name]'),
