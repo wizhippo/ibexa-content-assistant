@@ -21,8 +21,10 @@ const previewDocument = (html) => {
     )
     .join('');
   return `<!doctype html><html><head><meta charset="utf-8"><base href="${escapeAttribute(window.location.origin)}/">${styles}<style>
-    body{padding:20px;margin:0;background:#fff;color:#171b20;font-family:Arial,sans-serif;overflow-wrap:anywhere}
-    .ck-content{min-height:0}table{border-collapse:collapse;width:100%;margin:1em 0}th,td{border:1px solid #ccc;padding:.6em;vertical-align:top}th{font-weight:bold;background:#f3f4f5}
+    html{height:100%!important;max-height:none!important;overflow:auto!important}
+    body{height:auto!important;max-height:none!important;overflow:visible!important;box-sizing:border-box;padding:20px;margin:0;background:#fff;color:#171b20;font-family:Arial,sans-serif;overflow-wrap:anywhere}
+    .ibexa-richtext.ezrichtext-field.ck-content{height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important}
+    table{border-collapse:collapse;width:100%;margin:1em 0}th,td{border:1px solid #ccc;padding:.6em;vertical-align:top}th{font-weight:bold;background:#f3f4f5}
     img,video{max-width:100%;height:auto}h1,h2,h3,h4,h5,h6{margin:1em 0 .5em}p{margin:0 0 1em}a,button,input,select,textarea{pointer-events:none}
   </style></head><body><div class="ibexa-richtext ezrichtext-field ck-content">${html}</div></body></html>`;
 };
