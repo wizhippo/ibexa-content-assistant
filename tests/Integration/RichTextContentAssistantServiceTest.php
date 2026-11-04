@@ -95,6 +95,114 @@ final class RichTextContentAssistantServiceTest extends KernelTestCase
         self::assertTrue(true);
     }
 
+    public function testRewriteExplicitlyRequiresEveryTrackingLinkOccurrence(): void
+    {
+        $url = 'https://example.com/redirect?target=https%3A%2F%2Fsupplier.example&tracking=abc';
+        $link = '<link xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="'.htmlspecialchars($url, ENT_XML1).'">Supplier</link>';
+        $xml = self::xml('<para>'.$link.' and '.$link.'</para>');
+        $agent = $this->createMock(AgentInterface::class);
+        $agent->expects(self::once())->method('call')->with(self::callback(static function (MessageBag $messages) use ($url): bool {
+            $items = iterator_to_array($messages);
+            $payload = json_decode($items[0]->asText(), true, 512, JSON_THROW_ON_ERROR);
+            self::assertSame([['url' => $url, 'occurrences' => 2]], $payload['required_links']);
+            self::assertStringContainsString('tracking', $payload['schema']['link_rules']);
+
+            return true;
+        }))->willReturn(new Execution(static function () use ($xml): \Generator {
+            yield new Result(new TextResult($xml));
+        }));
+        $result = $this->service($agent)->suggest('rewrite', 'Restructure supplier information.', $xml, 'eng-GB', self::CAPABILITIES);
+        self::assertSame(2, substr_count($result['editXhtml'], 'tracking=abc'));
+        $roundTrip = self::getContainer()->get(IbexaRichTextProcessor::class)->read($result['editXhtml']);
+        foreach ($roundTrip->getElementsByTagName('link') as $element) {
+            self::assertSame($url, $element->getAttributeNS(IbexaRichTextProcessor::XLINK, 'href'));
+        }
+    }
+
+    /** @dataProvider appendOperations */
+    public function testAppendDoesNotRequireRepeatingExistingLinks(string $operation): void
+    {
+        $agent = $this->createMock(AgentInterface::class);
+        $agent->expects(self::once())->method('call')->with(self::callback(static function (MessageBag $messages): bool {
+            $items = iterator_to_array($messages);
+            $payload = json_decode($items[0]->asText(), true, 512, JSON_THROW_ON_ERROR);
+            self::assertSame([], $payload['required_links']);
+
+            return true;
+        }))->willReturn(new Execution(static function (): \Generator {
+            yield new Result(new TextResult(self::xml('<para>New content.</para>')));
+        }));
+        $url = 'https://example.com/redirect?target=https%3A%2F%2Fsupplier.example&tracking=abc';
+        $source = self::xml('<para><link xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="'.htmlspecialchars($url, ENT_XML1).'">Supplier</link></para>');
+        $result = $this->service($agent)->suggest($operation, 'Add another section.', $source, 'eng-GB', self::CAPABILITIES);
+        self::assertSame(1, substr_count($result['editXhtml'], 'tracking=abc'));
+        self::assertStringContainsString('New content.', $result['previewHtml']);
+    }
+
+    public static function appendOperations(): iterable
+    {
+        yield 'author' => ['author'];
+        yield 'continue' => ['continue'];
+    }
+
+    /** @dataProvider invalidLinkRewrites */
+    public function testChangedLinksHaveSpecificSafeErrorAndNoPreview(string $body): void
+    {
+        $link = self::trackingLink();
+        $agent = $this->createMock(AgentInterface::class);
+        $agent->expects(self::once())->method('call')->willReturn(new Execution(static function () use ($body): \Generator {
+            yield new Result(new TextResult(self::xml('<para>'.$body.'</para>')));
+        }));
+        try {
+            $this->service($agent)->suggest('rewrite', '', self::xml('<para>'.$link.' and '.$link.'</para>'), 'eng-GB', self::CAPABILITIES);
+            self::fail('A link preservation failure must not produce a preview.');
+        } catch (InvalidRichTextSuggestion $exception) {
+            self::assertSame('The suggestion removed or changed an existing hyperlink. Every original link, including duplicate and tracking links, must be preserved. Your field has not changed. Please regenerate.', $exception->getMessage());
+            self::assertStringNotContainsString('example.com', (string)$exception);
+            self::assertStringNotContainsString('tracking=abc', (string)$exception);
+            self::assertNull($exception->getPrevious());
+        }
+    }
+
+    public static function invalidLinkRewrites(): iterable
+    {
+        $link = self::trackingLink();
+        yield 'removed' => ['Supplier'];
+        yield 'dropped duplicate' => [$link];
+        yield 'added duplicate' => [$link.$link.$link];
+        yield 'changed tracking parameter' => [str_replace('tracking=abc', 'tracking=changed', $link.$link)];
+        yield 'decoded percent encoding' => [str_replace('https%3A%2F%2F', 'https://', $link.$link)];
+        yield 'double XML escaping' => [str_replace('&amp;', '&amp;amp;', $link.$link)];
+    }
+
+    private static function trackingLink(): string
+    {
+        return '<link xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="https://example.com/redirect?target=https%3A%2F%2Fsupplier.example&amp;tracking=abc">Supplier</link>';
+    }
+
+    public function testRequiredLinksExcludeProtectedBlocksAndRestoreTheirLinksUnchanged(): void
+    {
+        $hidden = '<eztemplate name="worldia_sso"><ezcontent><para>'.str_replace('tracking=abc', 'tracking=private', self::trackingLink()).self::trackingLink().'</para></ezcontent></eztemplate>';
+        $sourceXml = self::xml('<para>'.self::trackingLink().'</para>'.$hidden);
+        $agent = $this->createMock(AgentInterface::class);
+        $agent->expects(self::once())->method('call')->willReturnCallback(static function (MessageBag $messages): Execution {
+            $payload = json_decode(iterator_to_array($messages)[0]->asText(), true, 512, JSON_THROW_ON_ERROR);
+            self::assertSame([['url' => 'https://example.com/redirect?target=https%3A%2F%2Fsupplier.example&tracking=abc', 'occurrences' => 1]], $payload['required_links']);
+            self::assertStringNotContainsString('tracking=private', json_encode($payload, JSON_THROW_ON_ERROR));
+
+            return new Execution(static function () use ($payload): \Generator {
+                yield new Result(new TextResult($payload['source_docbook']));
+            });
+        });
+        $result = $this->service($agent)->suggest('rewrite', '', $sourceXml, 'eng-GB', self::CAPABILITIES);
+        $processor = self::getContainer()->get(IbexaRichTextProcessor::class);
+        $source = $processor->read($sourceXml);
+        // The native editor conversion adds namespace declarations and link defaults.
+        $source = $processor->read($processor->render($source)['editXhtml']);
+        $restored = $processor->read($result['editXhtml']);
+        self::assertSame($source->getElementsByTagName('eztemplate')->item(0)->C14N(), $restored->getElementsByTagName('eztemplate')->item(0)->C14N());
+    }
+
     private function service(AgentInterface $agent): RichTextContentAssistantService
     {
         return new RichTextContentAssistantService(self::getContainer()->get(IbexaRichTextProcessor::class), new ContentAssistantService($agent), $agent);

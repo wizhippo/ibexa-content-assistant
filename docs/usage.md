@@ -275,7 +275,8 @@ before editors can apply the suggestion.
   incoming JSON request up to 8 MiB. These are configurable and protect application
   memory and parsing independently of the model context.
 - Default model: `gpt-6.1-terra`, context budget 1,050,000 tokens, output budget
-  128,000 tokens, and safety margin 1,024 tokens. HTTP deadline: 60 seconds.
+  128,000 tokens, and safety margin 1,024 tokens. HTTP inactivity timeout: 120 seconds;
+  maximum request duration: 180 seconds.
 - XML is parsed with network access disabled; supplied DTD/entity declarations,
   arbitrary generated elements, scripts, styles, and unsafe link protocols are
   rejected before conversion. Existing protected nodes are restored by the server.

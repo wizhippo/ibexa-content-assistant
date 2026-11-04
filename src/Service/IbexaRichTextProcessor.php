@@ -139,6 +139,8 @@ final class IbexaRichTextProcessor
             }
 
             return $document;
+        } catch (InvalidRichTextSuggestion $exception) {
+            throw $exception;
         } catch (\Throwable $exception) {
             throw new InvalidRichTextSuggestion('The suggestion could not be validated as Ibexa RichText. Your field has not changed. Please regenerate.', previous: $exception);
         }
@@ -174,6 +176,7 @@ final class IbexaRichTextProcessor
             'lists' => $capabilities['lists'],
             'literal_layout_class' => ['normal', 'monospaced'],
             'namespaces' => ['default' => self::DOCBOOK, 'ezxhtml' => self::XHTML, 'xlink' => self::XLINK],
+            'link_rules' => 'For rewrites, preserve every original hyperlink with each required_links URL appearing as a link xlink:href exactly occurrences times, including duplicate links. Copy each URL verbatim, including tracking URLs, redirects, query parameters and percent encoding. Never shorten, normalize, decode, or replace a URL with its redirect destination. XML-escape attribute values so the decoded xlink:href value remains identical (for example & becomes &amp;). Links inside AI_KEEP_ blocks are restored automatically. For author and continue, required_links is empty because existing content and links are retained automatically; do not repeat them.',
             'examples' => [
                 '<title ezxhtml:level="2">Section heading</title>',
                 '<para><literallayout class="normal">Line one&#10;Line two</literallayout></para>',
@@ -182,7 +185,7 @@ final class IbexaRichTextProcessor
                 '<informaltable border="1"><thead><tr><th><para>Column</para></th></tr></thead><tbody><tr><td><para>Value</para></td></tr></tbody></informaltable>',
                 '<para><link xlink:href="https://example.com" xlink:show="none">Link label</link></para>',
             ],
-            'rules' => 'Copy the namespace URIs from namespaces exactly; never change them or insert additional path segments. Table cells and list items contain para elements. Preserve original link URLs and all AI_KEEP_ tokens exactly once, in order. A block token stays alone in its para; an inline token stays inline. Never create embeds, unlisted custom tags, scripts, custom styles, DOCTYPE, entities, or new internal content references. You may restructure prose into headings, lists and tables according to the instructions and supported capabilities.',
+            'rules' => 'Copy the namespace URIs from namespaces exactly; never change them or insert additional path segments. Table cells and list items contain para elements. Follow link_rules. Preserve all AI_KEEP_ tokens exactly once, in order. A block token stays alone in its para; an inline token stays inline. Never create embeds, unlisted custom tags, scripts, custom styles, DOCTYPE, entities, or new internal content references. You may restructure prose into headings, lists and tables according to the instructions and supported capabilities.',
         ];
     }
 
@@ -277,17 +280,34 @@ final class IbexaRichTextProcessor
         }
     }
 
+    /**
+     * Only inspect the protected XML sent to the model, never opaque source blocks.
+     * @return list<array{url: string, occurrences: int}>
+     */
+    public function requiredLinks(string $protectedXml): array
+    {
+        $required = [];
+        foreach (array_count_values($this->links($this->parse($protectedXml))) as $url => $count) {
+            $required[] = ['url' => (string)$url, 'occurrences' => $count];
+        }
+
+        return $required;
+    }
+
+    /** @return list<string> */
+    private function links(\DOMDocument $document): array
+    {
+        $xpath = new \DOMXPath($document);
+        $xpath->registerNamespace('db', self::DOCBOOK);
+        $xpath->registerNamespace('xlink', self::XLINK);
+
+        return array_map(static fn (\DOMAttr $attribute): string => $attribute->value, iterator_to_array($xpath->query('//db:link/@xlink:href')));
+    }
+
     private function checkLinks(\DOMDocument $document, \DOMDocument $source, bool $requireOriginals): void
     {
-        $links = static function (\DOMDocument $doc): array {
-            $xpath = new \DOMXPath($doc);
-            $xpath->registerNamespace('db', self::DOCBOOK);
-            $xpath->registerNamespace('xlink', self::XLINK);
-
-            return array_map(static fn (\DOMAttr $attribute): string => $attribute->value, iterator_to_array($xpath->query('//db:link/@xlink:href')));
-        };
-        $originals = $links($source);
-        $generated = $links($document);
+        $originals = $this->links($source);
+        $generated = $this->links($document);
         foreach ($generated as $url) {
             if (!preg_match('~^(https?://|mailto:|tel:|#)~i', $url)
                 && !(in_array($url, $originals, true) && preg_match('~^ez(?:content|location)://\d+$~D', $url))) {
@@ -295,7 +315,7 @@ final class IbexaRichTextProcessor
             }
         }
         if ($requireOriginals && array_diff_assoc(array_count_values($originals), array_count_values($generated)) !== []) {
-            throw new \UnexpectedValueException('An existing link was removed or changed.');
+            throw new InvalidRichTextSuggestion('The suggestion removed or changed an existing hyperlink. Every original link, including duplicate and tracking links, must be preserved. Your field has not changed. Please regenerate.');
         }
     }
 }

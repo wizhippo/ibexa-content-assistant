@@ -68,6 +68,7 @@ final class RichTextContentAssistantService
             'response_format' => 'ibexa_docbook',
             'schema' => $this->processor->contract($capabilities),
             'source_docbook' => $protected['xml'],
+            'required_links' => $append ? [] : $this->processor->requiredLinks($protected['xml']),
             'mode' => $append ? 'Write only new content to append. Do not repeat source text or AI_KEEP_ tokens.' : 'Rewrite the complete section, including all AI_KEEP_ tokens exactly once in their original order.',
         ] + ($context === [] ? [] : ['action_context' => $context]), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)));
         $xml = $this->agent->call($messages)->asText();

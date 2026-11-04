@@ -3,8 +3,9 @@ framework:
         scoped_clients:
             wizhippo_ibexa_content_assistant.http_client:
                 base_uri: '%env(OPENAI_BASE_URL)%'
-                timeout: 30
-                max_duration: 60
+                # Restructuring a complete RichText field can take longer to generate.
+                timeout: 120
+                max_duration: 180
     rate_limiter:
         wizhippo_ibexa_content_assistant:
             policy: fixed_window
