@@ -15,7 +15,8 @@ final class RichTextCustomTagRegistry
 
     public function __construct(
         #[Autowire(service: CustomTag::class)] private readonly Provider $provider,
-    ) {
+    )
+    {
     }
 
     /**
@@ -106,7 +107,7 @@ final class RichTextCustomTagRegistry
             }
             $children[] = $child;
         }
-        if (!in_array(array_map(static fn (\DOMElement $child): string => $child->localName, $children), [['ezcontent'], ['ezcontent', 'ezconfig']], true)) {
+        if (!in_array(array_map(static fn(\DOMElement $child): string => $child->localName, $children), [['ezcontent'], ['ezcontent', 'ezconfig']], true)) {
             throw new \UnexpectedValueException('Custom tags require ezcontent followed by optional ezconfig.');
         }
         $config = $children[1] ?? null;

@@ -77,7 +77,7 @@ final class ContentAssistantActionsController extends Controller
         $query = $request->query->getString('q');
         $type = $request->query->getString('type');
         $state = $request->query->getString('status');
-        $actions = array_filter($all, static fn (array $action, string $id): bool => ($query === '' || mb_stripos($id.' '.$action['name'], $query) !== false)
+        $actions = array_filter($all, static fn(array $action, string $id): bool => ($query === '' || mb_stripos($id . ' ' . $action['name'], $query) !== false)
             && ($type === '' || $type === $action['type'])
             && ($state === '' || $action['enabled'] === ($state === 'enabled')), ARRAY_FILTER_USE_BOTH);
 

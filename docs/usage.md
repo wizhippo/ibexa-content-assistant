@@ -366,3 +366,9 @@ All assistant tests, including native schema/converter and endpoint integration
 tests, are in this bundle. The default PHPUnit suite excludes `tests/Integration`;
 use `phpunit.integration.xml.dist` with a configured Ibexa host's `KERNEL_CLASS` and
 `WIZHIPPO_TEST_BOOTSTRAP` for those tests. See README for exact commands.
+
+## RichText attribute policy
+
+See the [schema/converter audit and generation policy](richtext-attribute-policy.md)
+for accepted attributes, namespace requirements, diagnostics and intentional
+schema exclusions.

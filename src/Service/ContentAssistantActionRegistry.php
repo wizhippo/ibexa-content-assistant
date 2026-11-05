@@ -20,10 +20,11 @@ final class ContentAssistantActionRegistry
     ];
 
     public function __construct(
-        private readonly SettingService $settings,
+        private readonly SettingService                                                       $settings,
         #[Autowire(param: 'wizhippo_ibexa_content_assistant.actions')] private readonly array $defaults,
-        #[Autowire('%kernel.project_dir%/var')] private readonly string $lockDirectory,
-    ) {
+        #[Autowire('%kernel.project_dir%/var')] private readonly string                       $lockDirectory,
+    )
+    {
     }
 
     public function all(bool $enabledOnly = false): array
@@ -34,7 +35,7 @@ final class ContentAssistantActionRegistry
             $actions = $this->defaults;
         }
 
-        return $enabledOnly ? array_filter($actions, static fn (array $action): bool => $action['enabled']) : $actions;
+        return $enabledOnly ? array_filter($actions, static fn(array $action): bool => $action['enabled']) : $actions;
     }
 
     public function get(string $identifier): array

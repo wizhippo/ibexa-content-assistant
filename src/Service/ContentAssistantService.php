@@ -15,7 +15,8 @@ final class ContentAssistantService
 
     public function __construct(
         #[Autowire(service: 'ai.agent.wizhippo_ibexa_content_assistant', lazy: true)] private readonly AgentInterface $agent,
-    ) {
+    )
+    {
     }
 
     public function suggest(string $operation, string $instructions, string $source, string $language, array $context = []): string
@@ -23,11 +24,11 @@ final class ContentAssistantService
         $this->validate($operation, $instructions, $source, $language);
 
         $messages = new MessageBag(Message::ofUser(json_encode([
-            'operation' => $operation,
-            'language' => $language,
-            'editorial_instructions' => $instructions,
-            'source_text' => $source,
-        ] + ($context === [] ? [] : ['action_context' => $context]), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)));
+                'operation' => $operation,
+                'language' => $language,
+                'editorial_instructions' => $instructions,
+                'source_text' => $source,
+            ] + ($context === [] ? [] : ['action_context' => $context]), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)));
 
         $result = $this->agent->call($messages)->asText();
         if (trim($result) === '') {

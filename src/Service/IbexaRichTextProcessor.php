@@ -8,6 +8,7 @@ use Ibexa\Contracts\FieldTypeRichText\RichText\Converter;
 use Ibexa\Contracts\FieldTypeRichText\RichText\InputHandlerInterface;
 use Ibexa\Contracts\FieldTypeRichText\RichText\ValidatorInterface;
 use Ibexa\FieldTypeRichText\RichText\Converter\Html5Edit;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Wizhippo\IbexaContentAssistant\Exception\InvalidRichTextSuggestion;
 
@@ -16,17 +17,45 @@ final class IbexaRichTextProcessor
     public const string DOCBOOK = 'http://docbook.org/ns/docbook';
     public const string XHTML = 'http://ibexa.co/xmlns/dxp/docbook/xhtml';
     public const string XLINK = 'http://www.w3.org/1999/xlink';
+    public const string XML = 'http://www.w3.org/XML/1998/namespace';
     private const array ELEMENTS = ['section', 'title', 'para', 'emphasis', 'link', 'itemizedlist', 'orderedlist', 'listitem', 'informaltable', 'thead', 'tbody', 'tr', 'th', 'td', 'blockquote', 'literallayout', 'subscript', 'superscript'];
-    private const array ATTRIBUTES = ['version', 'id', 'role', 'level', 'href', 'show', 'width', 'border', 'colspan', 'rowspan', 'scope', 'startingnumber', 'numeration'];
+
+    /**
+     * Generation policy, not a replacement for Ibexa's schema. Empty namespace
+     * means an unprefixed attribute (the default namespace never applies to it).
+     * Keep this map shared with the model contract so the two cannot drift.
+     * @var array<string, array<string, list<string>>>
+     */
+    private const array ATTRIBUTES = [
+        'section' => ['' => ['version']],
+        'title' => [self::XHTML => ['level', 'textalign']],
+        'para' => [self::XHTML => ['textalign']],
+        'emphasis' => ['' => ['role']],
+        'link' => [self::XLINK => ['href', 'show', 'title']],
+        'orderedlist' => ['' => ['startingnumber', 'numeration']],
+        'informaltable' => ['' => ['width', 'border', 'title']],
+        'tr' => [self::XHTML => ['width']],
+        'th' => ['' => ['colspan', 'rowspan', 'scope', 'abbr', 'valign'], self::XHTML => ['width', 'textalign']],
+        'td' => ['' => ['colspan', 'rowspan', 'scope', 'valign'], self::XHTML => ['width', 'textalign']],
+        'literallayout' => ['' => ['class']],
+    ];
+    private const array ATTRIBUTE_VALUES = [
+        'emphasis' => ['role' => ['strong', 'underlined', 'strikedthrough']],
+        'literallayout' => ['class' => ['normal', 'monospaced']],
+        // The schema also permits XLink embed/other, which the editor does not generate.
+        'link' => ['show' => ['none', 'new', 'replace']],
+    ];
 
     public function __construct(
-        private readonly InputHandlerInterface $inputHandler,
+        private readonly InputHandlerInterface                                                       $inputHandler,
         #[Autowire(service: 'ibexa.richtext.validator.docbook')] private readonly ValidatorInterface $validator,
-        #[Autowire(service: Html5Edit::class)] private readonly Converter $editConverter,
-        #[Autowire(service: 'ibexa.richtext.converter.output.xhtml5')] private readonly Converter $outputConverter,
-        #[Autowire(param: 'wizhippo_ibexa_content_assistant.max_xml_bytes')] private readonly int $maxXmlBytes = 4194304,
-        private readonly ?RichTextCustomTagRegistry $customTags = null,
-    ) {
+        #[Autowire(service: Html5Edit::class)] private readonly Converter                            $editConverter,
+        #[Autowire(service: 'ibexa.richtext.converter.output.xhtml5')] private readonly Converter    $outputConverter,
+        #[Autowire(param: 'wizhippo_ibexa_content_assistant.max_xml_bytes')] private readonly int    $maxXmlBytes = 4194304,
+        private readonly ?RichTextCustomTagRegistry                                                  $customTags = null,
+        private readonly ?LoggerInterface                                                            $logger = null,
+    )
+    {
     }
 
     public function read(string $xml): \DOMDocument
@@ -94,7 +123,7 @@ final class IbexaRichTextProcessor
         }
         foreach ($ordered as $candidate) {
             $element = $candidate['node'];
-            $token = 'AI_KEEP_'.bin2hex(random_bytes(12));
+            $token = 'AI_KEEP_' . bin2hex(random_bytes(12));
             $copy = $element->cloneNode(true);
             if (!$copy instanceof \DOMElement) {
                 throw new \UnexpectedValueException('A protected RichText element could not be copied.');
@@ -121,15 +150,11 @@ final class IbexaRichTextProcessor
         try {
             $document = $this->parse($xml);
             $this->assertGeneratedElements($document, $capabilities);
-            if ($this->validator->validateDocument($document) !== []) {
-                throw new \UnexpectedValueException('The suggestion does not conform to the Ibexa RichText schema.');
-            }
+            $this->assertSchema($document, 'generated');
             $expected = $append ? [] : $protected;
             $this->restore($document, $expected);
             $this->checkLinks($document, $source, !$append);
-            if ($this->validator->validateDocument($document) !== []) {
-                throw new \UnexpectedValueException('The restored suggestion does not conform to the Ibexa RichText schema.');
-            }
+            $this->assertSchema($document, 'restored');
             if ($append) {
                 $combined = clone $source;
                 foreach (iterator_to_array($document->documentElement->childNodes) as $child) {
@@ -166,8 +191,11 @@ final class IbexaRichTextProcessor
 
         return [
             'format' => 'Ibexa 5 RichText DocBook XML, never HTML or Markdown',
-            'root' => '<section xmlns="'.self::DOCBOOK.'" xmlns:ezxhtml="'.self::XHTML.'" xmlns:xlink="'.self::XLINK.'" version="5.0-variant ezpublish-1.0">...</section>',
+            'root' => '<section xmlns="' . self::DOCBOOK . '" xmlns:ezxhtml="' . self::XHTML . '" xmlns:xlink="' . self::XLINK . '" version="5.0-variant ezpublish-1.0">...</section>',
             'elements' => array_merge(self::ELEMENTS, $tags === [] ? [] : RichTextCustomTagRegistry::ELEMENTS),
+            'attributes' => $this->attributeContract(),
+            'attribute_values' => self::ATTRIBUTE_VALUES,
+            'attribute_rules' => 'Only attributes listed for each element are allowed. Map keys are namespace URIs; an empty key means NO namespace. Unprefixed attributes have no namespace, even with a default element namespace. Use xml:id, never id; ezxhtml:level and ezxhtml:textalign, never level or textalign; xlink:href, xlink:show and xlink:title only on link. Use the displayed prefixes and exact namespace URIs; the installed Ibexa Schematron requires the literal xlink:href prefix. xlink:title may be empty. attribute_values further restricts values; all other values and document structure must pass the installed Ibexa schema. Custom tag XML permits only unprefixed name and optional type=tag on eztemplate/eztemplateinline, key on ezvalue, and no attributes on ezcontent/ezconfig; their configuration values follow custom_tags.',
             'custom_tags' => $tags,
             'custom_tag_format' => '<eztemplate name="configured_name"><ezcontent><para>Block content</para></ezcontent><ezconfig><ezvalue key="configured_attribute">Plain text value</ezvalue></ezconfig></eztemplate>',
             'custom_tag_rules' => 'Only use names in custom_tags. Use the specified element: eztemplate for blocks, eztemplateinline inside paragraphs for inline tags. Always include ezcontent first, then optional ezconfig with plain-text ezvalue children keyed by configured attribute names. Inline ezcontent contains inline text, never paragraphs. Supply required attributes; use only configured choices and valid types. Omitted attributes receive configured defaults. Do not invent facts, URLs, content IDs or configuration values. Use labels and descriptions to decide when a tag is appropriate.',
@@ -175,18 +203,41 @@ final class IbexaRichTextProcessor
             'tables' => $capabilities['tables'],
             'lists' => $capabilities['lists'],
             'literal_layout_class' => ['normal', 'monospaced'],
-            'namespaces' => ['default' => self::DOCBOOK, 'ezxhtml' => self::XHTML, 'xlink' => self::XLINK],
+            'namespaces' => ['default' => self::DOCBOOK, 'ezxhtml' => self::XHTML, 'xlink' => self::XLINK, 'xml' => self::XML],
             'link_rules' => 'For rewrites, preserve every original hyperlink with each required_links URL appearing as a link xlink:href exactly occurrences times, including duplicate links. Copy each URL verbatim, including tracking URLs, redirects, query parameters and percent encoding. Never shorten, normalize, decode, or replace a URL with its redirect destination. XML-escape attribute values so the decoded xlink:href value remains identical (for example & becomes &amp;). Links inside AI_KEEP_ blocks are restored automatically. For author and continue, required_links is empty because existing content and links are retained automatically; do not repeat them.',
             'examples' => [
-                '<title ezxhtml:level="2">Section heading</title>',
+                '<title ezxhtml:level="2" ezxhtml:textalign="center">Section heading</title>',
                 '<para><literallayout class="normal">Line one&#10;Line two</literallayout></para>',
                 '<para>Text with <emphasis role="strong">bold</emphasis> and <emphasis>italic</emphasis>.</para>',
                 '<itemizedlist><listitem><para>List item</para></listitem></itemizedlist>',
-                '<informaltable border="1"><thead><tr><th><para>Column</para></th></tr></thead><tbody><tr><td><para>Value</para></td></tr></tbody></informaltable>',
-                '<para><link xlink:href="https://example.com" xlink:show="none">Link label</link></para>',
+                '<informaltable border="1" title="Schedule"><thead><tr><th scope="col" abbr="Name" valign="middle" ezxhtml:width="50%"><para>Column</para></th></tr></thead><tbody><tr><td><para>Value</para></td></tr></tbody></informaltable>',
+                '<para xml:id="supplier">Supplier information</para>',
+                '<para><link xlink:href="https://example.com" xlink:show="none" xlink:title="">Link label</link></para>',
+                '<para><link xlink:href="https://example.com/details" xlink:title="Supplier details">Details</link></para>',
             ],
             'rules' => 'Copy the namespace URIs from namespaces exactly; never change them or insert additional path segments. Table cells and list items contain para elements. Follow link_rules. Preserve all AI_KEEP_ tokens exactly once, in order. A block token stays alone in its para; an inline token stays inline. Never create embeds, unlisted custom tags, scripts, custom styles, DOCTYPE, entities, or new internal content references. You may restructure prose into headings, lists and tables according to the instructions and supported capabilities.',
         ];
+    }
+
+    /** @return array<string, array<string, list<string>>> */
+    private function attributeContract(): array
+    {
+        $attributes = self::ATTRIBUTES;
+        foreach (self::ELEMENTS as $element) {
+            $attributes[$element][self::XML] = ['id'];
+        }
+
+        return $attributes;
+    }
+
+    private function assertSchema(\DOMDocument $document, string $stage): void
+    {
+        $errors = $this->validator->validateDocument($document);
+        if ($errors !== []) {
+            // Validator messages may quote prose or values. Only log stage/count.
+            $this->logger?->warning('RichText generation rejected: schema validation failed.', ['stage' => $stage, 'error_count' => count($errors)]);
+            throw new \UnexpectedValueException('The ' . $stage . ' suggestion does not conform to the Ibexa RichText schema.');
+        }
     }
 
     private function parse(string $xml): \DOMDocument
@@ -218,6 +269,7 @@ final class IbexaRichTextProcessor
     {
         $tags = $this->customTags?->definitions($capabilities) ?? [];
         $this->customTags?->validate($document, $tags);
+        $attributes = $this->attributeContract();
         foreach ($document->getElementsByTagName('*') as $element) {
             $customTagElement = $tags !== [] && in_array($element->localName, RichTextCustomTagRegistry::ELEMENTS, true);
             if ($element->namespaceURI !== self::DOCBOOK || (!in_array($element->localName, self::ELEMENTS, true) && !$customTagElement)) {
@@ -230,14 +282,30 @@ final class IbexaRichTextProcessor
                 if ($attribute->namespaceURI === 'http://www.w3.org/2000/xmlns/') {
                     continue;
                 }
-                // Ibexa's own XHTML input converter emits this DocBook attribute
-                // for line breaks. It is not an arbitrary HTML/CSS class.
-                $literalLayoutClass = $element->localName === 'literallayout'
-                    && $attribute->nodeName === 'class'
-                    && $attribute->namespaceURI === null
-                    && in_array($attribute->value, ['normal', 'monospaced'], true);
-                if (!in_array($attribute->localName, self::ATTRIBUTES, true) && !$literalLayoutClass) {
-                    throw new \UnexpectedValueException('Unsupported generated attribute.');
+                $namespace = $attribute->namespaceURI ?? '';
+                $allowed = $attributes[$element->localName][$namespace] ?? [];
+                if (!in_array($attribute->localName, $allowed, true)) {
+                    // Unknown names/URIs are model-controlled and can contain secrets.
+                    // Report only known vocabulary, never raw XML or attribute values.
+                    $knownNames = ['id'];
+                    foreach ($attributes as $namespaces) {
+                        foreach ($namespaces as $names) {
+                            $knownNames = array_merge($knownNames, $names);
+                        }
+                    }
+                    $context = [
+                        'element' => $element->localName,
+                        'attribute' => in_array($attribute->localName, $knownNames, true) ? $attribute->localName : '[unrecognized]',
+                        'namespace' => in_array($namespace, ['', self::XML, self::XHTML, self::XLINK, self::DOCBOOK], true) ? $namespace : '[unrecognized]',
+                        'line' => $element->getLineNo(),
+                    ];
+                    $this->logger?->warning('RichText generation rejected: unsupported attribute.', $context);
+                    throw new \UnexpectedValueException(sprintf('Unsupported generated attribute (element=%s, namespace=%s, attribute=%s, line=%d).', ...array_values($context)));
+                }
+                $values = self::ATTRIBUTE_VALUES[$element->localName][$attribute->localName] ?? null;
+                if ($values !== null && !in_array($attribute->value, $values, true)) {
+                    $this->logger?->warning('RichText generation rejected: prohibited attribute value.', ['element' => $element->localName, 'attribute' => $attribute->localName, 'line' => $element->getLineNo()]);
+                    throw new \UnexpectedValueException('Prohibited generated attribute value.');
                 }
             }
             if ($element->localName === 'title' && !in_array((int)$element->getAttributeNS(self::XHTML, 'level'), $capabilities['headingLevels'], true)) {
@@ -259,7 +327,7 @@ final class IbexaRichTextProcessor
         }
         $xpath = new \DOMXPath($document);
         foreach ($protected as $token => $item) {
-            $textNodes = $xpath->query('//text()[contains(., "'.$token.'")]');
+            $textNodes = $xpath->query('//text()[contains(., "' . $token . '")]');
             if ($textNodes->length !== 1) {
                 throw new \UnexpectedValueException('Embedded content placeholder is invalid.');
             }
@@ -301,7 +369,7 @@ final class IbexaRichTextProcessor
         $xpath->registerNamespace('db', self::DOCBOOK);
         $xpath->registerNamespace('xlink', self::XLINK);
 
-        return array_map(static fn (\DOMAttr $attribute): string => $attribute->value, iterator_to_array($xpath->query('//db:link/@xlink:href')));
+        return array_map(static fn(\DOMAttr $attribute): string => $attribute->value, iterator_to_array($xpath->query('//db:link/@xlink:href')));
     }
 
     private function checkLinks(\DOMDocument $document, \DOMDocument $source, bool $requireOriginals): void

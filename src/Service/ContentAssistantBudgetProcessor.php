@@ -27,11 +27,12 @@ use Wizhippo\IbexaContentAssistant\Exception\ContextWindowExceeded;
 final class ContentAssistantBudgetProcessor implements InputProcessorInterface, OutputProcessorInterface
 {
     public function __construct(
-        #[Autowire(param: 'wizhippo_ibexa_content_assistant.context_window')] private readonly int $contextWindow,
-        #[Autowire(param: 'wizhippo_ibexa_content_assistant.max_output_tokens')] private readonly int $maxOutputTokens,
+        #[Autowire(param: 'wizhippo_ibexa_content_assistant.context_window')] private readonly int      $contextWindow,
+        #[Autowire(param: 'wizhippo_ibexa_content_assistant.max_output_tokens')] private readonly int   $maxOutputTokens,
         #[Autowire(param: 'wizhippo_ibexa_content_assistant.token_safety_margin')] private readonly int $safetyMargin,
-        #[Autowire(param: 'wizhippo_ibexa_content_assistant.max_response_bytes')] private readonly int $maxResponseBytes,
-    ) {
+        #[Autowire(param: 'wizhippo_ibexa_content_assistant.max_response_bytes')] private readonly int  $maxResponseBytes,
+    )
+    {
         if ($contextWindow <= 0 || $maxOutputTokens <= 0 || $safetyMargin < 0 || $maxResponseBytes <= 0
             || $maxOutputTokens >= $contextWindow || $safetyMargin >= $contextWindow - $maxOutputTokens) {
             throw new \InvalidArgumentException('Configure a context_window larger than max_output_tokens plus token_safety_margin for the content assistant model.');

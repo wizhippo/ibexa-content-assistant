@@ -16,12 +16,13 @@ final class ContentAssistantAccess
 {
     /** @param array<string, list<string>> $allowedFields */
     public function __construct(
-        private readonly Repository $repository,
-        private readonly Security $security,
+        private readonly Repository             $repository,
+        private readonly Security               $security,
         private readonly ContentAssistantPolicy $policy,
-        private readonly bool $enabled,
-        private readonly array $allowedFields,
-    ) {
+        private readonly bool                   $enabled,
+        private readonly array                  $allowedFields,
+    )
+    {
     }
 
     public function isAvailable(): bool

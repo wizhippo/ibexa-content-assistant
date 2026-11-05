@@ -30,16 +30,17 @@ final class ContentAssistantController extends AbstractController
         methods: ['POST'],
     )]
     public function suggest(
-        Request $request,
-        ContentAssistantAccess $access,
-        ContentAssistantService $assistant,
-        RichTextContentAssistantService $richTextAssistant,
-        Repository $repository,
-        LoggerInterface $logger,
+        Request                                                                             $request,
+        ContentAssistantAccess                                                              $access,
+        ContentAssistantService                                                             $assistant,
+        RichTextContentAssistantService                                                     $richTextAssistant,
+        Repository                                                                          $repository,
+        LoggerInterface                                                                     $logger,
         #[Autowire(service: 'limiter.wizhippo_ibexa_content_assistant')] RateLimiterFactory $limiter,
-        ContentAssistantActionRegistry $actions,
-        #[Autowire(param: 'wizhippo_ibexa_content_assistant.max_request_bytes')] int $maxRequestBytes = 8388608,
-    ): JsonResponse {
+        ContentAssistantActionRegistry                                                      $actions,
+        #[Autowire(param: 'wizhippo_ibexa_content_assistant.max_request_bytes')] int        $maxRequestBytes = 8388608,
+    ): JsonResponse
+    {
         if (!$access->isAvailable()) {
             return $this->json(['error' => 'The content assistant is unavailable for this account.'], 403);
         }

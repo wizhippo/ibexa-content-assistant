@@ -12,10 +12,11 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 final class RichTextContentAssistantService
 {
     public function __construct(
-        private readonly IbexaRichTextProcessor $processor,
-        private readonly ContentAssistantService $textAssistant,
+        private readonly IbexaRichTextProcessor                                                                       $processor,
+        private readonly ContentAssistantService                                                                      $textAssistant,
         #[Autowire(service: 'ai.agent.wizhippo_ibexa_content_assistant', lazy: true)] private readonly AgentInterface $agent,
-    ) {
+    )
+    {
     }
 
     /** @param array<string, mixed> $capabilities */
@@ -62,15 +63,15 @@ final class RichTextContentAssistantService
         $protected = $this->processor->protect($source);
         $append = in_array($operation, ['author', 'continue'], true);
         $messages = new MessageBag(Message::ofUser(json_encode([
-            'operation' => $operation,
-            'language' => $language,
-            'editorial_instructions' => $instructions,
-            'response_format' => 'ibexa_docbook',
-            'schema' => $this->processor->contract($capabilities),
-            'source_docbook' => $protected['xml'],
-            'required_links' => $append ? [] : $this->processor->requiredLinks($protected['xml']),
-            'mode' => $append ? 'Write only new content to append. Do not repeat source text or AI_KEEP_ tokens.' : 'Rewrite the complete section, including all AI_KEEP_ tokens exactly once in their original order.',
-        ] + ($context === [] ? [] : ['action_context' => $context]), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)));
+                'operation' => $operation,
+                'language' => $language,
+                'editorial_instructions' => $instructions,
+                'response_format' => 'ibexa_docbook',
+                'schema' => $this->processor->contract($capabilities),
+                'source_docbook' => $protected['xml'],
+                'required_links' => $append ? [] : $this->processor->requiredLinks($protected['xml']),
+                'mode' => $append ? 'Write only new content to append. Do not repeat source text or AI_KEEP_ tokens.' : 'Rewrite the complete section, including all AI_KEEP_ tokens exactly once in their original order.',
+            ] + ($context === [] ? [] : ['action_context' => $context]), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)));
         $xml = $this->agent->call($messages)->asText();
         $document = $this->processor->generated($xml, $protected['protected'], $source, $append, $capabilities);
 

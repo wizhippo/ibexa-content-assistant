@@ -13,10 +13,11 @@ use Wizhippo\IbexaContentAssistant\Service\ContentAssistantActionRegistry;
 final class ContentAssistantComponent implements ComponentInterface
 {
     public function __construct(
-        private readonly Environment $twig,
-        private readonly ContentAssistantAccess $access,
+        private readonly Environment                    $twig,
+        private readonly ContentAssistantAccess         $access,
         private readonly ContentAssistantActionRegistry $actions,
-    ) {
+    )
+    {
     }
 
     public function render(array $parameters = []): string
