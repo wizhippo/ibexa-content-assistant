@@ -115,6 +115,8 @@ test('RichText sends Ibexa editor XHTML and actual supported capabilities', asyn
   assert.match(page.controls.get('formatted').srcdoc, /<table>/);
   assert.match(page.controls.get('formatted').srcdoc, /protected-embed.jpg/);
   assert.match(page.controls.get('formatted').srcdoc, /editor.css/);
+  assert.match(page.controls.get('formatted').srcdoc, /<div class="ibexa-richtext ibexa_richtext-field ck-content">/);
+  assert.match(page.controls.get('formatted').srcdoc, /\.ibexa-richtext\.ibexa_richtext-field\.ck-content\{height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important\}/);
 });
 test('native formatted application uses an undoable CKEditor data batch', async () => {
   const { editor, calls } = richEditor(); const page = editorPage(richResponse, editor);
