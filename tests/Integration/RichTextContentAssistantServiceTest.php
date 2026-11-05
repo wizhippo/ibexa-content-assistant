@@ -150,7 +150,7 @@ final class RichTextContentAssistantServiceTest extends KernelTestCase
     {
         $link = self::trackingLink();
         $agent = $this->createMock(AgentInterface::class);
-        $agent->expects(self::once())->method('call')->willReturn(new Execution(static function () use ($body): \Generator {
+        $agent->expects(self::exactly(2))->method('call')->willReturn(new Execution(static function () use ($body): \Generator {
             yield new Result(new TextResult(self::xml('<para>'.$body.'</para>')));
         }));
         try {

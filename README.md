@@ -123,6 +123,11 @@ vendor/bin/phpunit -c vendor/wizhippo/ibexa-content-assistant/phpunit.integratio
 Adjust the kernel and bootstrap paths for your application. Provider requests in
 automated tests are mocked.
 
+RichText output rules override action-template format requests. A failed suggestion
+gets one validation-guided repair retry; both attempts must preserve required
+links and protected content and pass all validation checks. See the
+[format precedence and repair policy](docs/richtext-attribute-policy.md#format-precedence-and-bounded-repair).
+
 See [usage and implementation details](docs/usage.md) for the processing pipeline,
 limits, troubleshooting, and data-sharing behavior.
 See the [roadmap and open decisions](docs/roadmap.md) for proposed field type

@@ -43,7 +43,7 @@ final class ContentAssistantContainerTest extends TestCase
                     $container->setParameter('env(OPENAI_API_KEY)', 'test-key');
                     $container->loadFromExtension('framework', ['secret' => 'test', 'test' => true, 'property_info' => ['with_constructor_extractor' => true]]);
                     $container->loadFromExtension('wizhippo_ibexa_content_assistant', [
-                        'context_window' => 5000, 'max_output_tokens' => 200, 'token_safety_margin' => 100,
+                        'context_window' => 10000, 'max_output_tokens' => 200, 'token_safety_margin' => 100,
                     ]);
                 });
             }
@@ -86,7 +86,7 @@ final class ContentAssistantContainerTest extends TestCase
             self::assertSame('Complete response.', $assistant->suggest('rewrite', '', 'Source', 'eng-GB'));
             // This fits by itself but exceeds the budget once the system prompt is added.
             try {
-                $assistant->suggest('rewrite', '', str_repeat('s', 4000), 'eng-GB');
+                $assistant->suggest('rewrite', '', str_repeat('s', 9000), 'eng-GB');
                 self::fail('The full prompt must be checked before invoking the provider.');
             } catch (ContextWindowExceeded) {
             }

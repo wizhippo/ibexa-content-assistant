@@ -8,9 +8,12 @@ use Symfony\AI\Agent\AgentInterface;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Wizhippo\IbexaContentAssistant\Exception\InvalidRichTextSuggestion;
 
 final class RichTextContentAssistantService
 {
+    private const int MAX_REPAIR_RETRIES = 1;
+
     public function __construct(
         private readonly IbexaRichTextProcessor                                                                       $processor,
         private readonly ContentAssistantService                                                                      $textAssistant,
@@ -62,18 +65,32 @@ final class RichTextContentAssistantService
         $source = $this->processor->read($xml);
         $protected = $this->processor->protect($source);
         $append = in_array($operation, ['author', 'continue'], true);
-        $messages = new MessageBag(Message::ofUser(json_encode([
-                'operation' => $operation,
-                'language' => $language,
-                'editorial_instructions' => $instructions,
-                'response_format' => 'ibexa_docbook',
-                'schema' => $this->processor->contract($capabilities),
-                'source_docbook' => $protected['xml'],
-                'required_links' => $append ? [] : $this->processor->requiredLinks($protected['xml']),
-                'mode' => $append ? 'Write only new content to append. Do not repeat source text or AI_KEEP_ tokens.' : 'Rewrite the complete section, including all AI_KEEP_ tokens exactly once in their original order.',
-            ] + ($context === [] ? [] : ['action_context' => $context]), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)));
-        $xml = $this->agent->call($messages)->asText();
-        $document = $this->processor->generated($xml, $protected['protected'], $source, $append, $capabilities);
+        $payload = [
+            'operation' => $operation,
+            'language' => $language,
+            'editorial_instructions' => $instructions,
+            'response_format' => 'ibexa_docbook',
+            'instruction_priority' => 'The required response_format, schema, security and content-preservation rules override action_context templates and editorial instructions, including any request for Markdown or HTML. Use only listed elements and attributes; never invent markup, placeholders, facts, contact details or URLs.',
+            'schema' => $this->processor->contract($capabilities),
+            'source_docbook' => $protected['xml'],
+            'required_links' => $append ? [] : $this->processor->requiredLinks($protected['xml']),
+            'mode' => $append ? 'Write only new content to append. Do not repeat source text or AI_KEEP_ tokens.' : 'Rewrite the complete section, including all AI_KEEP_ tokens exactly once in their original order.',
+        ] + ($context === [] ? [] : ['action_context' => $context]);
+        for ($attempt = 0; ; ++$attempt) {
+            // A fresh, text-only request keeps each attempt inside the existing
+            // context/output budgets. Never resend rejected prose or opaque nodes.
+            $messages = new MessageBag(Message::ofUser(json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)));
+            $suggestion = $this->agent->call($messages)->asText();
+            try {
+                $document = $this->processor->generated($suggestion, $protected['protected'], $source, $append, $capabilities);
+                break;
+            } catch (InvalidRichTextSuggestion $exception) {
+                if ($attempt >= self::MAX_REPAIR_RETRIES) {
+                    throw $exception;
+                }
+                $payload['repair_feedback'] = $this->processor->repairFeedback($suggestion, $payload['required_links'], $capabilities);
+            }
+        }
 
         return $this->processor->render($document);
     }

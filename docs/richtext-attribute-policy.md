@@ -108,3 +108,45 @@ contain secrets. Schema diagnostics contain only the validation stage
 (`generated`/`restored`) and error count. No XML, source text, generated prose,
 attribute/link values, validator error messages, or exception objects are logged.
 The user-facing failure remains a safe regeneration message.
+
+## Format precedence and bounded repair
+
+The required `response_format`, schema, security and preservation rules take
+precedence over configured action templates and additional editorial instructions.
+A template asking for Markdown is interpreted as a presentation request and must
+still produce DocBook for a RichText field. Action authors should remove requests
+for a specific serialization format: for example, replace “Output Markdown” in
+“Restructure Supplier Info” with “Use the field's required output format; preserve
+all source facts, contact hyperlinks and exact link destinations.” Saved action
+settings are not rewritten by a bundle update.
+
+A rejected generated document gets **one** repair retry (at most two model calls
+per suggestion). The retry starts from the same protected source, schema, editor
+capabilities and required links. It adds diagnostic `repair_feedback` listing
+unsupported element names and missing/excess required-link counts together, even
+when element validation prevented the normal link check from running. Missing
+links include only URLs already disclosed in the editable source, never URLs
+inside opaque protected nodes. `occurrences` is the total required count;
+`missing_occurrences` or `excess_occurrences` describes the discrepancy.
+
+Unsupported names are deduplicated, limited to 32 entries and 128 UTF-8 bytes each.
+Foreign namespace values are redacted. Malformed XML is identified without
+forwarding parser messages. Rejected XML/prose is not resent and feedback is
+never logged. Each attempt uses the existing agent processors and context/output
+budgets; repair feedback can itself exceed the available context budget, in which
+case no second provider request is made. Provider failures are not repair retries.
+
+Both attempts must independently pass the complete existing validation pipeline.
+Invalid elements are never whitelisted, stripped, or silently replaced. The
+model is instructed to use native `literallayout` markup with newline text for
+line breaks, retain exact supplied `AI_KEEP_` text tokens, and never invent tags,
+facts, contact details or URLs. After a second validation failure, no preview is
+returned and the field stays unchanged. Schema/link checks enforce structural
+and URL preservation rules; they cannot prove the factual accuracy of every
+sentence produced by a model.
+
+Additional safe warning categories are `unsupported_element`,
+`missing_required_links`, and `required_link_count_mismatch` (for surplus copies
+of an existing link). Unknown element names and namespaces are redacted in logs;
+link warnings contain occurrence counts only. URLs, generated prose, source
+content, opaque nodes and credentials are never included in these warnings.

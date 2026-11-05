@@ -215,7 +215,7 @@ final class IbexaRichTextProcessor
                 '<para><link xlink:href="https://example.com" xlink:show="none" xlink:title="">Link label</link></para>',
                 '<para><link xlink:href="https://example.com/details" xlink:title="Supplier details">Details</link></para>',
             ],
-            'rules' => 'Copy the namespace URIs from namespaces exactly; never change them or insert additional path segments. Table cells and list items contain para elements. Follow link_rules. Preserve all AI_KEEP_ tokens exactly once, in order. A block token stays alone in its para; an inline token stays inline. Never create embeds, unlisted custom tags, scripts, custom styles, DOCTYPE, entities, or new internal content references. You may restructure prose into headings, lists and tables according to the instructions and supported capabilities.',
+            'rules' => 'Copy the namespace URIs from namespaces exactly; never change them or insert additional path segments. Table cells and list items contain para elements. Follow link_rules. Preserve all AI_KEEP_ tokens exactly once, in order. A block token stays alone in its para; an inline token stays inline. Use only the listed elements and attributes. Never invent elements or placeholder markup (including br-placeholder and bracket_placeholder), facts, contact details or URLs. Represent line breaks with literallayout class="normal" and newline text. Never create embeds, unlisted custom tags, scripts, custom styles, DOCTYPE, entities, or new internal content references. You may restructure prose into headings, lists and tables according to the instructions and supported capabilities.',
         ];
     }
 
@@ -273,6 +273,12 @@ final class IbexaRichTextProcessor
         foreach ($document->getElementsByTagName('*') as $element) {
             $customTagElement = $tags !== [] && in_array($element->localName, RichTextCustomTagRegistry::ELEMENTS, true);
             if ($element->namespaceURI !== self::DOCBOOK || (!in_array($element->localName, self::ELEMENTS, true) && !$customTagElement)) {
+                $this->logger?->warning('RichText generation rejected: unsupported element.', [
+                    'category' => 'unsupported_element',
+                    'element' => in_array($element->localName, array_merge(self::ELEMENTS, RichTextCustomTagRegistry::ELEMENTS), true) ? $element->localName : '[unrecognized]',
+                    'namespace' => $element->namespaceURI === self::DOCBOOK ? self::DOCBOOK : '[unrecognized]',
+                    'line' => $element->getLineNo(),
+                ]);
                 throw new \UnexpectedValueException('Unsupported generated element.');
             }
             if ($customTagElement) {
@@ -362,6 +368,60 @@ final class IbexaRichTextProcessor
         return $required;
     }
 
+    /**
+     * Diagnostic data for one model repair attempt, never for logs or responses.
+     * Required URLs come only from the already disclosed protected source; opaque
+     * content is never inspected here. Collect both problems even when element
+     * validation stopped before hyperlink validation could run.
+     * @param list<array{url: string, occurrences: int}> $requiredLinks
+     * @param array<string, mixed> $capabilities
+     * @return array<string, mixed>
+     */
+    public function repairFeedback(string $xml, array $requiredLinks, array $capabilities): array
+    {
+        $feedback = [
+            'instruction' => 'Regenerate the complete section from source_docbook. Fix all feedback while preserving every fact, required link and supplied AI_KEEP_ token. Do not invent markup, placeholders, facts, contact details or URLs. Use the supported literallayout markup for line breaks. All validation rules still apply.',
+            'invalid_xml' => false,
+            'unsupported_elements' => [],
+            'missing_required_links' => [],
+            'excess_required_links' => [],
+        ];
+        $counts = [];
+        try {
+            $document = $this->parse($xml);
+            $counts = array_count_values($this->links($document));
+            $tags = $this->customTags?->definitions($capabilities) ?? [];
+            $allowed = array_merge(self::ELEMENTS, $tags === [] ? [] : RichTextCustomTagRegistry::ELEMENTS);
+            foreach ($document->getElementsByTagName('*') as $element) {
+                if ($element->namespaceURI !== self::DOCBOOK || !in_array($element->localName, $allowed, true)) {
+                    // Names are model data. Bound their size and never put them in logs.
+                    $name = mb_strcut($element->localName, 0, 128, 'UTF-8');
+                    $key = ($element->namespaceURI === self::DOCBOOK ? 'docbook:' : 'incorrect_namespace:').$name;
+                    $feedback['unsupported_elements'][$key] = [
+                        'name' => $name,
+                        'namespace' => $element->namespaceURI === self::DOCBOOK ? self::DOCBOOK : '[unrecognized]',
+                    ];
+                    if (count($feedback['unsupported_elements']) >= 32) {
+                        break;
+                    }
+                }
+            }
+            $feedback['unsupported_elements'] = array_values($feedback['unsupported_elements']);
+        } catch (\InvalidArgumentException) {
+            $feedback['invalid_xml'] = true;
+        }
+        foreach ($requiredLinks as $link) {
+            $actual = $counts[$link['url']] ?? 0;
+            if ($actual < $link['occurrences']) {
+                $feedback['missing_required_links'][] = $link + ['missing_occurrences' => $link['occurrences'] - $actual];
+            } elseif ($actual > $link['occurrences']) {
+                $feedback['excess_required_links'][] = $link + ['excess_occurrences' => $actual - $link['occurrences']];
+            }
+        }
+
+        return $feedback;
+    }
+
     /** @return list<string> */
     private function links(\DOMDocument $document): array
     {
@@ -383,6 +443,18 @@ final class IbexaRichTextProcessor
             }
         }
         if ($requireOriginals && array_diff_assoc(array_count_values($originals), array_count_values($generated)) !== []) {
+            $missing = $excess = 0;
+            $actualCounts = array_count_values($generated);
+            foreach (array_count_values($originals) as $url => $expectedCount) {
+                $difference = $expectedCount - ($actualCounts[$url] ?? 0);
+                $missing += max(0, $difference);
+                $excess += max(0, -$difference);
+            }
+            $this->logger?->warning('RichText generation rejected: required link counts changed.', [
+                'category' => $missing > 0 ? 'missing_required_links' : 'required_link_count_mismatch',
+                'missing_occurrences' => $missing,
+                'excess_occurrences' => $excess,
+            ]);
             throw new InvalidRichTextSuggestion('The suggestion removed or changed an existing hyperlink. Every original link, including duplicate and tracking links, must be preserved. Your field has not changed. Please regenerate.');
         }
     }
